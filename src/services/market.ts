@@ -1,24 +1,48 @@
 import { Market } from '@project-serum/serum';
 import { PublicKey } from '@solana/web3.js';
 import { connection } from '../config/config';
+import { logger } from '../utils/logger';
 
 interface Order {
   price: number;
   size: number;
 }
 
-type OrderItem = [number, number];
+// Default markets for different environments
+const DEFAULT_MARKETS = {
+  'mainnet-beta': 'HWHvQhFmJB3NUcu1aihKmrKegfVxBEHzwVX6yZCKEsi1', // SOL/USDC
+  'devnet': '9wFFyRfZBsuAha4YcuxcXLKwMxJR43S7fPfQLusDBzvT',      // SOL/USDC
+  'testnet': '',
+};
 
 export class MarketService {
   private market!: Market;
 
   async initialize(marketAddress: string): Promise<void> {
-    this.market = await Market.load(
-      connection,
-      new PublicKey(marketAddress),
-      {},
-      new PublicKey('9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin'),
-    );
+    try {
+      // If no market address is provided, use the default for the current cluster
+      const address = marketAddress || DEFAULT_MARKETS[process.env.SOLANA_CLUSTER as keyof typeof DEFAULT_MARKETS] || '';
+      
+      if (!address) {
+        throw new Error('No market address provided and no default available for current cluster');
+      }
+
+      logger.info(`Initializing market with address: ${address}`);
+      
+      this.market = await Market.load(
+        connection,
+        new PublicKey(address),
+        {},
+        new PublicKey('9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin'),
+      );
+
+      // Verify the market is accessible
+      await this.market.loadBids(connection);
+      logger.info('Market loaded successfully');
+    } catch (error) {
+      logger.error('Failed to initialize market:', error);
+      throw error;
+    }
   }
 
   async getOrderBook() {
@@ -35,15 +59,17 @@ export class MarketService {
     let bestBid: Order | null = null;
     let bestAsk: Order | null = null;
 
-    const firstBid = bids.items().next().value as OrderItem;
-    if (firstBid) {
-      const [price, size] = firstBid;
+    const bidsIterator = bids.items();
+    const firstBid = bidsIterator.next();
+    if (!firstBid.done) {
+      const [price, size] = firstBid.value;
       bestBid = { price, size };
     }
 
-    const firstAsk = asks.items().next().value as OrderItem;
-    if (firstAsk) {
-      const [price, size] = firstAsk;
+    const asksIterator = asks.items();
+    const firstAsk = asksIterator.next();
+    if (!firstAsk.done) {
+      const [price, size] = firstAsk.value;
       bestAsk = { price, size };
     }
 

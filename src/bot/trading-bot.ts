@@ -1,17 +1,20 @@
 import { CONFIG } from '../config/config';
 import { WalletService } from '../services/wallet';
+import { MockWalletService } from '../services/mock-wallet';
 import { MarketService } from '../services/market';
 import { logger } from '../utils/logger';
 import { SpreadTradingStrategy, TradingStrategy } from './trading-strategy';
 
 export class TradingBot {
-  private walletService: WalletService;
+  private walletService: WalletService | MockWalletService;
   private marketService: MarketService;
   private strategy: TradingStrategy;
   private isRunning: boolean;
 
   constructor() {
-    this.walletService = new WalletService();
+    this.walletService = CONFIG.DRY_RUN 
+      ? new MockWalletService(CONFIG.DRY_RUN_INITIAL_SOL)
+      : new WalletService();
     this.marketService = new MarketService();
     this.strategy = new SpreadTradingStrategy();
     this.isRunning = false;
@@ -32,7 +35,7 @@ export class TradingBot {
       logger.info('Market initialized successfully');
       
       if (CONFIG.DRY_RUN) {
-        logger.info('Running in DRY RUN mode - no real trades will be executed');
+        logger.info('Running in DRY RUN mode - using mock wallet with simulated trades');
       }
 
       // Start trading loop
@@ -56,7 +59,18 @@ export class TradingBot {
         const decision = this.strategy.analyze({ bestBid, bestAsk });
 
         if (decision.shouldBuy || decision.shouldSell) {
-          if (!CONFIG.DRY_RUN) {
+          if (CONFIG.DRY_RUN && this.walletService instanceof MockWalletService) {
+            if (decision.shouldBuy && decision.buyPrice && decision.tradeSize) {
+              await this.walletService.executeTrade('buy', decision.tradeSize, decision.buyPrice);
+            }
+            if (decision.shouldSell && decision.sellPrice && decision.tradeSize) {
+              await this.walletService.executeTrade('sell', decision.tradeSize, decision.sellPrice);
+            }
+
+            // Log PnL information
+            const { totalPnL, percentagePnL } = this.walletService.getPnL();
+            logger.info(`[DRY RUN] Current PnL: ${totalPnL.toFixed(4)} SOL (${percentagePnL.toFixed(2)}%)`);
+          } else {
             // TODO: Implement actual order placement
             logger.info('Order placement not implemented yet');
           }
@@ -77,5 +91,11 @@ export class TradingBot {
   public stop() {
     this.isRunning = false;
     logger.info('Stopping trading bot...');
+
+    if (CONFIG.DRY_RUN && this.walletService instanceof MockWalletService) {
+      const { totalPnL, percentagePnL } = this.walletService.getPnL();
+      logger.info(`[DRY RUN] Final PnL: ${totalPnL.toFixed(4)} SOL (${percentagePnL.toFixed(2)}%)`);
+      logger.info(`[DRY RUN] Trade History:`, this.walletService.getTradeHistory());
+    }
   }
 } 

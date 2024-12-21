@@ -14,6 +14,9 @@ export const CONFIG = {
   MIN_SPREAD_PERCENTAGE: parseFloat(process.env.MIN_SPREAD_PERCENTAGE || '1.5'),
   MAX_TRADE_SIZE_SOL: parseFloat(process.env.MAX_TRADE_SIZE_SOL || '1.0'),
   MIN_SOL_BALANCE: parseFloat(process.env.MIN_SOL_BALANCE || '0.1'),
+  
+  // Dry run parameters
+  DRY_RUN_INITIAL_SOL: parseFloat(process.env.DRY_RUN_INITIAL_SOL || '10.0'),
 }
 
 if (!CONFIG.RPC_ENDPOINT) {
