@@ -3,6 +3,7 @@
     "@project-serum/serum": "^0.13.65",
     "@solana/web3.js": "^1.87.0",
     "bs58": "^6.0.0",
+    "csv-parse": "^5.5.3",
     "decimal.js": "^10.4.3",
     "dotenv": "^16.0.3",
     "winston": "^3.8.2"

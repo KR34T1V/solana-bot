@@ -78,20 +78,80 @@ yarn start
 ```
 
 ### Backtesting
-Run the bot against historical or simulated market data:
+The bot includes a sophisticated backtesting system that supports both historical data and simulated market conditions.
+
+#### Running a Backtest
+Basic backtest with default settings:
 ```bash
 yarn backtest
 ```
 
-The backtesting system provides:
-- Trade execution simulation
-- Position tracking
-- PnL calculation
-- Performance metrics:
-  - Total trades
-  - Win/loss ratio
-  - Profit/loss statistics
-  - Position analysis
+Custom backtest with configuration:
+```bash
+yarn backtest '{"initialBalance": 100, "dataSource": {"type": "simulated", "simulation": {"basePrice": 100, "volatility": 30, "timeframeMinutes": 1440}}}'
+```
+
+#### Backtesting Configuration
+
+1. **Data Sources**
+   - Historical Data (CSV):
+     ```json
+     {
+       "dataSource": {
+         "type": "csv",
+         "path": "path/to/historical_data.csv"
+       }
+     }
+     ```
+   - Simulated Data:
+     ```json
+     {
+       "dataSource": {
+         "type": "simulated",
+         "simulation": {
+           "basePrice": 100,
+           "volatility": 50,
+           "spreadPercentage": 0.2,
+           "timeframeMinutes": 1440,
+           "interval": 60,
+           "trendBias": 0
+         }
+       }
+     }
+     ```
+
+2. **Simulation Parameters**
+   - `basePrice`: Starting price in SOL
+   - `volatility`: Annual volatility percentage
+   - `spreadPercentage`: Average bid-ask spread
+   - `timeframeMinutes`: Duration of simulation
+   - `interval`: Data point interval in seconds
+   - `trendBias`: Price trend bias (-1 to 1)
+
+3. **Historical Data Format (CSV)**
+   Required columns:
+   ```csv
+   timestamp,bidPrice,bidSize,askPrice,askSize
+   2024-01-01T00:00:00Z,100.5,1.5,100.7,2.0
+   ```
+
+#### Backtest Results
+The system provides comprehensive performance metrics:
+- Total number of trades
+- Win/loss ratio
+- Profit and loss (PnL)
+- Position analysis
+- Trade history
+
+Example output:
+```
+Backtest Results:
+- Total Trades: 124
+- Winning Trades: 75
+- Win Rate: 60.48%
+- Total PnL: 2.5430 SOL
+- Percentage PnL: 25.43%
+```
 
 ### Other Commands
 ```bash
