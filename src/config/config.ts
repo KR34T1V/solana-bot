@@ -10,4 +10,8 @@ export const CONFIG = {
   MARKET_ADDRESS: process.env.MARKET_ADDRESS || '',
 }
 
+if (!CONFIG.RPC_ENDPOINT) {
+  throw new Error('RPC_ENDPOINT is not set');
+}
+
 export const connection = new Connection(CONFIG.RPC_ENDPOINT); 
