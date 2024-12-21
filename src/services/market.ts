@@ -61,16 +61,20 @@ export class MarketService {
 
     const bidsIterator = bids.items();
     const firstBid = bidsIterator.next();
-    if (!firstBid.done) {
-      const [price, size] = firstBid.value;
-      bestBid = { price, size };
+    if (!firstBid.done && Array.isArray(firstBid.value) && firstBid.value.length === 2) {
+      bestBid = {
+        price: firstBid.value[0],
+        size: firstBid.value[1],
+      };
     }
 
     const asksIterator = asks.items();
     const firstAsk = asksIterator.next();
-    if (!firstAsk.done) {
-      const [price, size] = firstAsk.value;
-      bestAsk = { price, size };
+    if (!firstAsk.done && Array.isArray(firstAsk.value) && firstAsk.value.length === 2) {
+      bestAsk = {
+        price: firstAsk.value[0],
+        size: firstAsk.value[1],
+      };
     }
 
     return { bestBid, bestAsk };
