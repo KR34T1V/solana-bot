@@ -2,15 +2,18 @@ import { CONFIG } from '../config/config';
 import { WalletService } from '../services/wallet';
 import { MarketService } from '../services/market';
 import { logger } from '../utils/logger';
+import { SpreadTradingStrategy, TradingStrategy } from './trading-strategy';
 
 export class TradingBot {
   private walletService: WalletService;
   private marketService: MarketService;
+  private strategy: TradingStrategy;
   private isRunning: boolean;
 
   constructor() {
     this.walletService = new WalletService();
     this.marketService = new MarketService();
+    this.strategy = new SpreadTradingStrategy();
     this.isRunning = false;
   }
 
@@ -20,9 +23,17 @@ export class TradingBot {
       const balance = await this.walletService.getBalance();
       logger.info(`Wallet balance: ${balance / 1e9} SOL`);
 
+      if (balance / 1e9 < CONFIG.MIN_SOL_BALANCE) {
+        throw new Error(`Insufficient balance. Minimum required: ${CONFIG.MIN_SOL_BALANCE} SOL`);
+      }
+
       // Initialize market
       await this.marketService.initialize(CONFIG.MARKET_ADDRESS);
       logger.info('Market initialized successfully');
+      
+      if (CONFIG.DRY_RUN) {
+        logger.info('Running in DRY RUN mode - no real trades will be executed');
+      }
 
       // Start trading loop
       await this.startTradingLoop();
@@ -39,17 +50,18 @@ export class TradingBot {
     while (this.isRunning) {
       try {
         // Get current market state
-        const orderBook = await this.marketService.getOrderBook();
         const { bestBid, bestAsk } = await this.marketService.getBestOrders();
+        
+        // Analyze market and get trading decision
+        const decision = this.strategy.analyze({ bestBid, bestAsk });
 
-        if (bestBid && bestAsk) {
-          const spread = bestAsk.price - bestBid.price;
-          const spreadPercentage = (spread / bestBid.price) * 100;
-
-          logger.info(`Current spread: ${spreadPercentage.toFixed(2)}%`);
-
-          // Implement your trading strategy here
-          // For example: if spread > threshold, place orders
+        if (decision.shouldBuy || decision.shouldSell) {
+          if (!CONFIG.DRY_RUN) {
+            // TODO: Implement actual order placement
+            logger.info('Order placement not implemented yet');
+          }
+        } else {
+          logger.debug('No trading opportunity found');
         }
 
         // Add delay to prevent too frequent requests

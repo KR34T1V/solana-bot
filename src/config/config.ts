@@ -8,6 +8,12 @@ export const CONFIG = {
   RPC_ENDPOINT: process.env.RPC_ENDPOINT || '',
   PRIVATE_KEY: process.env.PRIVATE_KEY || '',
   MARKET_ADDRESS: process.env.MARKET_ADDRESS || '',
+  
+  // Trading parameters
+  DRY_RUN: process.env.DRY_RUN === 'true',
+  MIN_SPREAD_PERCENTAGE: parseFloat(process.env.MIN_SPREAD_PERCENTAGE || '1.5'),
+  MAX_TRADE_SIZE_SOL: parseFloat(process.env.MAX_TRADE_SIZE_SOL || '1.0'),
+  MIN_SOL_BALANCE: parseFloat(process.env.MIN_SOL_BALANCE || '0.1'),
 }
 
 if (!CONFIG.RPC_ENDPOINT) {
