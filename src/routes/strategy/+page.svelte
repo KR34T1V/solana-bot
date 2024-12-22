@@ -42,7 +42,10 @@
                   <h3 class="text-lg font-medium text-gray-900">{strategy.name}</h3>
                   <p class="mt-1 text-sm text-gray-500">{strategy.type}</p>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex space-x-2">
+                  <a href="/strategy/{strategy.id}/backtest" class="btn btn-primary">
+                    Backtest
+                  </a>
                   <a href="/strategy/{strategy.id}/edit" class="btn btn-secondary">
                     Edit
                   </a>

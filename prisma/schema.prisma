@@ -18,6 +18,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   strategies    Strategy[]
   bots          Bot[]
+  backtests     Backtest[]
 }
 
 model Strategy {
@@ -62,13 +63,20 @@ model Trade {
 }
 
 model Backtest {
-  id          String    @id @default(cuid())
-  startDate   DateTime
-  endDate     DateTime
-  results     String    // Backtest results including metrics as JSON string
-  createdAt   DateTime  @default(now())
-  strategyId  String
-  strategy    Strategy  @relation(fields: [strategyId], references: [id])
+  id              String    @id @default(cuid())
+  pair            String    // Trading pair (e.g., "SOL-USDC")
+  timeframe       String    // Timeframe (e.g., "1h", "4h", "1d")
+  startDate       DateTime
+  endDate         DateTime
+  initialBalance  Float
+  status          String    // "RUNNING", "COMPLETED", "FAILED"
+  results         String    // Backtest results including metrics as JSON string
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  strategyId      String
+  strategy        Strategy  @relation(fields: [strategyId], references: [id])
 }
 
 model PriceData {
