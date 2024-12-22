@@ -14,9 +14,9 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center">
       <h1 class="text-2xl font-semibold text-gray-900">Trading Strategies</h1>
-      <button class="btn btn-primary">
+      <a href="/strategy/new" class="btn btn-primary">
         Create Strategy
-      </button>
+      </a>
     </div>
 
     {#if strategies.length === 0}
@@ -26,6 +26,11 @@
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">No strategies</h3>
         <p class="mt-1 text-sm text-gray-500">Get started by creating a new trading strategy.</p>
+        <div class="mt-6">
+          <a href="/strategy/new" class="btn btn-primary">
+            Create Strategy
+          </a>
+        </div>
       </div>
     {:else}
       <div class="mt-6 grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -38,9 +43,9 @@
                   <p class="mt-1 text-sm text-gray-500">{strategy.type}</p>
                 </div>
                 <div class="ml-4">
-                  <button class="btn btn-secondary">
+                  <a href="/strategy/{strategy.id}/edit" class="btn btn-secondary">
                     Edit
-                  </button>
+                  </a>
                 </div>
               </div>
               <div class="mt-4">
