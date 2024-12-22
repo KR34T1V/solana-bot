@@ -22,16 +22,33 @@ model User {
 }
 
 model Strategy {
+  id            String    @id @default(cuid())
+  name          String
+  type          String    // e.g., "MEAN_REVERSION", "TREND_FOLLOWING"
+  config        String    // Strategy-specific configuration as JSON string
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  bots          Bot[]
+  backtests     Backtest[]
+  versions      StrategyVersion[]
+  currentVersion Int      @default(1)
+}
+
+model StrategyVersion {
   id          String    @id @default(cuid())
-  name        String
-  type        String    // e.g., "MEAN_REVERSION", "TREND_FOLLOWING"
-  config      String    // Strategy-specific configuration as JSON string
+  version     Int       // Version number
+  name        String    // Strategy name at this version
+  type        String    // Strategy type at this version
+  config      String    // Strategy configuration at this version
+  changes     String    // Description of changes in this version
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  bots        Bot[]
+  strategyId  String
+  strategy    Strategy  @relation(fields: [strategyId], references: [id], onDelete: Cascade)
   backtests   Backtest[]
+
+  @@unique([strategyId, version])
 }
 
 model Bot {
@@ -77,6 +94,8 @@ model Backtest {
   user            User      @relation(fields: [userId], references: [id])
   strategyId      String
   strategy        Strategy  @relation(fields: [strategyId], references: [id])
+  versionId       String?
+  version         StrategyVersion? @relation(fields: [versionId], references: [id])
 }
 
 model PriceData {

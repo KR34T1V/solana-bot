@@ -8,9 +8,11 @@
   let selectedType = data.strategyTypes.find(t => t.id === data.strategy.type) || data.strategyTypes[0];
   let name = data.strategy.name;
   let config = JSON.parse(data.strategy.config);
+  let changes = '';
   let error = '';
   let loading = false;
   let showDeleteConfirm = false;
+  let showVersionHistory = false;
   
   $: configString = JSON.stringify(config, null, 2);
   
@@ -26,6 +28,10 @@
       [key]: typeof selectedType.defaultConfig[key] === 'number' ? Number(value) : value
     };
   }
+
+  function formatDate(date: string | Date) {
+    return new Date(date).toLocaleString();
+  }
 </script>
 
 <svelte:head>
@@ -35,8 +41,17 @@
 <div class="py-6">
   <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center">
-      <h1 class="text-2xl font-semibold text-gray-900">Edit Strategy</h1>
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-900">Edit Strategy</h1>
+        <p class="mt-1 text-sm text-gray-500">Version {data.strategy.currentVersion}</p>
+      </div>
       <div class="flex space-x-4">
+        <button
+          class="btn btn-secondary"
+          on:click={() => showVersionHistory = true}
+        >
+          History
+        </button>
         <button
           class="btn btn-danger"
           on:click={() => showDeleteConfirm = true}
@@ -145,6 +160,21 @@
         <input type="hidden" name="config" value={configString} />
       </div>
 
+      <!-- Change Description -->
+      <div>
+        <label for="changes" class="label">Change Description</label>
+        <div class="mt-1">
+          <textarea
+            id="changes"
+            name="changes"
+            rows="3"
+            class="input"
+            bind:value={changes}
+            placeholder="Describe the changes made in this version..."
+          ></textarea>
+        </div>
+      </div>
+
       <!-- Submit Button -->
       <div class="flex justify-end">
         <button
@@ -167,6 +197,7 @@
   </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
 {#if showDeleteConfirm}
   <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
   <div class="fixed inset-0 z-10 overflow-y-auto">
@@ -217,6 +248,93 @@
           >
             Cancel
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Version History Modal -->
+{#if showVersionHistory}
+  <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+  <div class="fixed inset-0 z-10 overflow-y-auto">
+    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+      <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:p-6">
+        <div class="absolute right-0 top-0 pr-4 pt-4">
+          <button
+            type="button"
+            class="rounded-md bg-white text-gray-400 hover:text-gray-500"
+            on:click={() => showVersionHistory = false}
+          >
+            <span class="sr-only">Close</span>
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="sm:flex sm:items-start">
+          <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Version History</h3>
+            <div class="mt-4">
+              <div class="flow-root">
+                <ul role="list" class="-mb-8">
+                  {#each data.strategy.versions as version, i}
+                    <li>
+                      <div class="relative pb-8">
+                        {#if i < data.strategy.versions.length - 1}
+                          <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                        {/if}
+                        <div class="relative flex space-x-3">
+                          <div>
+                            <span class="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center ring-8 ring-white">
+                              <span class="text-sm font-medium text-white">v{version.version}</span>
+                            </span>
+                          </div>
+                          <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                            <div>
+                              <p class="text-sm text-gray-500">{version.changes}</p>
+                            </div>
+                            <div class="whitespace-nowrap text-right text-sm text-gray-500">
+                              <time datetime={version.createdAt}>{formatDate(version.createdAt)}</time>
+                              {#if version.version !== data.strategy.currentVersion}
+                                <form
+                                  method="POST"
+                                  action="?/revert"
+                                  class="mt-2"
+                                  use:enhance={() => {
+                                    loading = true;
+                                    return async ({ result }) => {
+                                      loading = false;
+                                      if (result.type === 'success') {
+                                        showVersionHistory = false;
+                                        goto('/strategy');
+                                      } else if (result.type === 'error') {
+                                        error = result.error;
+                                      }
+                                    };
+                                  }}
+                                >
+                                  <input type="hidden" name="versionId" value={version.id} />
+                                  <button
+                                    type="submit"
+                                    class="text-blue-600 hover:text-blue-900"
+                                    disabled={loading}
+                                  >
+                                    Revert to this version
+                                  </button>
+                                </form>
+                              {/if}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

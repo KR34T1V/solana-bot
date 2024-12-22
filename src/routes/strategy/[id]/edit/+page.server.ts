@@ -8,7 +8,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   }
 
   const strategy = await prisma.strategy.findUnique({
-    where: { id: params.id }
+    where: { id: params.id },
+    include: {
+      versions: {
+        orderBy: { version: 'desc' }
+      }
+    }
   });
 
   if (!strategy) {
@@ -73,25 +78,107 @@ export const actions = {
     const name = formData.get('name') as string;
     const type = formData.get('type') as string;
     const config = formData.get('config') as string;
+    const changes = formData.get('changes') as string;
 
     if (!name || !type || !config) {
       return { success: false, error: 'Missing required fields' };
     }
 
     try {
-      const updatedStrategy = await prisma.strategy.update({
-        where: { id: params.id },
-        data: {
-          name,
-          type,
-          config
-        }
+      // Create a new version
+      const newVersion = strategy.currentVersion + 1;
+      
+      // Start a transaction to update both strategy and create version
+      const updatedStrategy = await prisma.$transaction(async (tx) => {
+        // Create new version
+        await tx.strategyVersion.create({
+          data: {
+            version: newVersion,
+            name,
+            type,
+            config,
+            changes: changes || `Updated strategy configuration (v${newVersion})`,
+            strategyId: strategy.id
+          }
+        });
+
+        // Update strategy
+        return tx.strategy.update({
+          where: { id: params.id },
+          data: {
+            name,
+            type,
+            config,
+            currentVersion: newVersion
+          }
+        });
       });
 
       return { success: true, strategy: updatedStrategy };
     } catch (error) {
       console.error('Strategy update error:', error);
       return { success: false, error: 'Failed to update strategy' };
+    }
+  },
+
+  revert: async ({ request, params, locals }) => {
+    if (!locals.userId) {
+      throw redirect(302, '/auth/login');
+    }
+
+    const formData = await request.formData();
+    const versionId = formData.get('versionId') as string;
+
+    if (!versionId) {
+      return { success: false, error: 'Version ID is required' };
+    }
+
+    try {
+      const version = await prisma.strategyVersion.findUnique({
+        where: { id: versionId },
+        include: { strategy: true }
+      });
+
+      if (!version) {
+        return { success: false, error: 'Version not found' };
+      }
+
+      if (version.strategy.userId !== locals.userId) {
+        return { success: false, error: 'Not authorized to revert this strategy' };
+      }
+
+      // Create a new version based on the reverted version
+      const newVersion = version.strategy.currentVersion + 1;
+      
+      const updatedStrategy = await prisma.$transaction(async (tx) => {
+        // Create new version
+        await tx.strategyVersion.create({
+          data: {
+            version: newVersion,
+            name: version.name,
+            type: version.type,
+            config: version.config,
+            changes: `Reverted to version ${version.version}`,
+            strategyId: version.strategyId
+          }
+        });
+
+        // Update strategy
+        return tx.strategy.update({
+          where: { id: version.strategyId },
+          data: {
+            name: version.name,
+            type: version.type,
+            config: version.config,
+            currentVersion: newVersion
+          }
+        });
+      });
+
+      return { success: true, strategy: updatedStrategy };
+    } catch (error) {
+      console.error('Strategy revert error:', error);
+      return { success: false, error: 'Failed to revert strategy' };
     }
   },
 
