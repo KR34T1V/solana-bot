@@ -8,20 +8,24 @@ export const GET: RequestHandler = async ({ setHeaders }) => {
     'Connection': 'keep-alive'
   });
 
+  let interval: NodeJS.Timeout;
+  
   const stream = new ReadableStream({
     start(controller) {
       // Send initial heartbeat
       controller.enqueue('event: heartbeat\ndata: connected\n\n');
 
-      // Set up Prisma subscription (mock for now)
-      const interval = setInterval(() => {
-        controller.enqueue('event: heartbeat\ndata: ping\n\n');
-      }, 30000); // Send heartbeat every 30 seconds
-
-      // Clean up on close
-      return () => {
-        clearInterval(interval);
-      };
+      // Set up heartbeat
+      interval = setInterval(() => {
+        try {
+          controller.enqueue('event: heartbeat\ndata: ping\n\n');
+        } catch (error) {
+          clearInterval(interval);
+        }
+      }, 30000);
+    },
+    cancel() {
+      clearInterval(interval);
     }
   });
 
@@ -29,11 +33,7 @@ export const GET: RequestHandler = async ({ setHeaders }) => {
 };
 
 // Endpoint to notify clients of updates
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request }) => {
   const { type, data } = await request.json();
-  
-  // In a real implementation, you would broadcast this to all connected clients
-  // For now, we'll just invalidate the trades dependency which will trigger a reload
-  
   return json({ success: true });
 }; 

@@ -9,13 +9,7 @@
 		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"moduleResolution": "bundler",
-		"module": "ESNext",
-		"target": "ESNext",
-		"paths": {
-			"$lib": ["./src/lib"],
-			"$lib/*": ["./src/lib/*"]
-		}
+		"moduleResolution": "bundler"
 	},
 	"ts-node": {
 		"esm": true,
