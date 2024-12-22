@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  strategies    Strategy[]
+  bots          Bot[]
+}
+
+model Strategy {
+  id          String    @id @default(cuid())
+  name        String
+  type        String    // e.g., "MEAN_REVERSION", "TREND_FOLLOWING"
+  config      String    // Strategy-specific configuration as JSON string
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  bots        Bot[]
+  backtests   Backtest[]
+}
+
+model Bot {
+  id          String    @id @default(cuid())
+  name        String
+  status      String    // "ACTIVE", "PAUSED", "STOPPED"
+  config      String    // Bot-specific configuration as JSON string
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  strategyId  String
+  strategy    Strategy  @relation(fields: [strategyId], references: [id])
+  trades      Trade[]
+}
+
+model Trade {
+  id          String    @id @default(cuid())
+  type        String    // "BUY", "SELL"
+  token       String    // Token symbol
+  amount      Float
+  price       Float
+  status      String    // "PENDING", "COMPLETED", "FAILED"
+  txHash      String?   // Solana transaction hash
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  botId       String
+  bot         Bot       @relation(fields: [botId], references: [id])
+}
+
+model Backtest {
+  id          String    @id @default(cuid())
+  startDate   DateTime
+  endDate     DateTime
+  results     String    // Backtest results including metrics as JSON string
+  createdAt   DateTime  @default(now())
+  strategyId  String
+  strategy    Strategy  @relation(fields: [strategyId], references: [id])
+}
+
+model PriceData {
+  id          String    @id @default(cuid())
+  token       String    // Token symbol
+  price       Float
+  volume      Float
+  timestamp   DateTime
+  source      String    // "BIRDEYE"
+
+  @@index([token, timestamp])
+} 
