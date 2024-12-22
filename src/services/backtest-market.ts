@@ -1,4 +1,4 @@
-import { MarketServiceInterface } from '../bot/trading-bot';
+import type { MarketServiceInterface } from '../bot/trading-bot';
 import { logger } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -54,22 +54,28 @@ export class BacktestMarketService implements MarketServiceInterface {
   }
 
   getCurrentTimestamp(): Date {
-    return this.historicalData[this.currentIndex]?.timestamp || new Date();
+    return this.getCurrentDataPoint().timestamp;
   }
 
   isBacktestComplete(): boolean {
-    return this.currentIndex >= this.historicalData.length;
+    return this.currentIndex >= this.historicalData.length - 1;
   }
 
   getProgress(): number {
-    return (this.currentIndex / this.historicalData.length) * 100;
+    return this.currentIndex / (this.historicalData.length - 1);
+  }
+
+  getHistoricalData(): HistoricalDataPoint[] {
+    return this.historicalData;
   }
 
   private getCurrentDataPoint(): HistoricalDataPoint {
     if (this.currentIndex >= this.historicalData.length) {
-      throw new Error('End of historical data reached');
+      throw new Error('Backtest data exhausted');
     }
-    return this.historicalData[this.currentIndex++];
+    const point = this.historicalData[this.currentIndex];
+    this.currentIndex++;
+    return point;
   }
 
   // Generate simulated market data with various patterns

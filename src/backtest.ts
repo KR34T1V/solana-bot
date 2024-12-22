@@ -5,7 +5,7 @@ import { BacktestMarketService } from './services/backtest-market';
 import { SpreadTradingStrategy } from './bot/trading-strategy';
 import { logger } from './utils/logger';
 
-interface BacktestConfig {
+export interface BacktestConfig {
   initialBalance: number;
   dataSource: {
     type: 'csv' | 'simulated';
@@ -18,6 +18,29 @@ interface BacktestConfig {
       interval: number;
       trendBias?: number;
     };
+  };
+}
+
+export interface BacktestResults {
+  historicalData: {
+    timestamp: Date;
+    bestBid: { price: number; size: number; };
+    bestAsk: { price: number; size: number; };
+  }[];
+  trades: {
+    type: 'buy' | 'sell';
+    amount: number;
+    price: number;
+    timestamp: Date;
+  }[];
+  metrics: {
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    winRate: number;
+    totalPnL: number;
+    percentagePnL: number;
+    averagePosition: number;
   };
 }
 
@@ -36,7 +59,7 @@ const DEFAULT_CONFIG: BacktestConfig = {
   }
 };
 
-async function runBacktest(config: BacktestConfig = DEFAULT_CONFIG) {
+export async function runBacktest(config: BacktestConfig = DEFAULT_CONFIG): Promise<BacktestResults> {
   try {
     // Initialize market service based on config
     const marketService = config.dataSource.type === 'csv' && config.dataSource.path
@@ -68,30 +91,24 @@ async function runBacktest(config: BacktestConfig = DEFAULT_CONFIG) {
     // Run the backtest
     await bot.initialize();
 
-    // Print final results
-    if (walletService instanceof BacktestWalletService) {
-      const metrics = walletService.getMetrics();
-      logger.info('Backtest Results:', {
-        totalTrades: metrics.totalTrades,
-        winningTrades: metrics.winningTrades,
-        losingTrades: metrics.losingTrades,
-        winRate: `${metrics.winRate.toFixed(2)}%`,
-        totalPnL: `${metrics.totalPnL.toFixed(4)} SOL`,
-        percentagePnL: `${metrics.percentagePnL.toFixed(2)}%`,
-        averagePosition: metrics.averagePosition,
-      });
+    // Get results
+    const metrics = walletService.getMetrics();
+    const trades = walletService.getTradeHistory();
+    const historicalData = marketService.getHistoricalData();
 
-      // Save trade history to CSV
-      const trades = walletService.getTradeHistory();
-      // TODO: Implement trade history export
-    }
+    return {
+      historicalData,
+      trades,
+      metrics
+    };
 
   } catch (error) {
     logger.error('Backtest failed:', error);
-    process.exit(1);
+    throw error;
   }
 }
 
-// Run backtest with custom config if provided via command line args
-const customConfig = process.argv[2] ? JSON.parse(process.argv[2]) : undefined;
-runBacktest(customConfig); 
+// Only run if this is the main module
+if (import.meta.url === new URL(import.meta.url).href) {
+  runBacktest();
+} 

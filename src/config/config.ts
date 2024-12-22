@@ -1,4 +1,6 @@
-import { Connection, Cluster } from '@solana/web3.js';
+import pkg from '@solana/web3.js';
+const { Connection } = pkg;
+import type { Cluster } from '@solana/web3.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
