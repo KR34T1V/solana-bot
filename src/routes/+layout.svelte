@@ -1,5 +1,7 @@
 <script lang="ts">
   import '../app.css';
+  
+  let { children } = $props();
 </script>
 
 <div class="min-h-screen bg-gray-100">
@@ -10,12 +12,12 @@
   </header>
 
   <main class="container mx-auto px-4 py-8">
-    <slot />
+    {@render children()}
   </main>
 
   <footer class="bg-white shadow mt-auto">
     <div class="container mx-auto px-4 py-6 text-center text-gray-600">
-      © 2023 Solana Bot. All rights reserved.
+      © 2024 Solana Bot. All rights reserved.
     </div>
   </footer>
 </div> 

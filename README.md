@@ -1,38 +1,80 @@
-# sv
+# Solana Trading Bot
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A trading bot for Solana with backtesting capabilities and multiple trading strategies.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- Real-time market data monitoring
+- Multiple trading strategies (Mean Reversion, VWAP, Volume Enhanced MA)
+- Backtesting engine with historical data
+- Integration with Shyft API for historical data
+- Web interface for monitoring and control
 
+## Setup
+
+1. Install dependencies:
 ```bash
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+yarn install
 ```
 
-## Developing
+2. Set up environment variables:
+```bash
+cp .env.example .env
+```
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+Add your Shyft API key to the `.env` file:
+```
+SHYFT_API_KEY=your_api_key_here
+```
+
+## Fetching Historical Data
+
+To fetch historical market data for backtesting:
 
 ```bash
-npm run dev
+# Fetch last 30 days of data for a specific market address
+yarn fetch-data -- 30 YOUR_MARKET_ADDRESS
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+# Example with specific market address
+yarn fetch-data -- 30 9wFFyRfZBsuAha4YcuxcXLKwMxJR43S7fPfQLusDBzvT
+```
+
+The data will be saved in the `data` directory and can be used for backtesting.
+
+## Running Backtests
+
+To run a backtest using the historical data:
+
+```bash
+# Run backtest with default configuration
+yarn backtest
+
+# Run backtest with custom configuration
+yarn backtest -- '{"initialBalance":100,"dataSource":{"type":"csv","path":"data/solana_historical_30d.csv"}}'
+```
+
+## Development
+
+Start the development server:
+
+```bash
+yarn dev
 ```
 
 ## Building
 
-To create a production version of your app:
+Create a production build:
 
 ```bash
-npm run build
+yarn build
 ```
 
-You can preview the production build with `npm run preview`.
+Preview the production build:
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```bash
+yarn preview
+```
+
+## License
+
+MIT
