@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { error as svelteError } from '@sveltejs/kit';
   import { onMount } from 'svelte';
   import { createChart, type IChartApi, type ISeriesApi, type LineData, type Time, type SeriesMarker, type SeriesMarkerPosition } from 'lightweight-charts';
   import { runBacktest, type BacktestConfig } from '../../backtest';
+  import { logger } from '../../utils/logger';
 
   let chartContainer: HTMLElement;
   let chart: IChartApi;
@@ -38,57 +40,73 @@
     averagePosition: 0
   });
   let isRunning = $state(false);
+  let errorMessage = $state<string | null>(null);
 
   onMount(() => {
-    chart = createChart(chartContainer, {
-      width: 800,
-      height: 400,
-      layout: {
-        background: { color: '#1a1a1a' },
-        textColor: '#d1d4dc',
-      },
-      grid: {
-        vertLines: { color: '#2B2B43' },
-        horzLines: { color: '#2B2B43' },
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
+    try {
+      chart = createChart(chartContainer, {
+        width: 800,
+        height: 400,
+        layout: {
+          background: { color: '#1a1a1a' },
+          textColor: '#d1d4dc',
+        },
+        grid: {
+          vertLines: { color: '#2B2B43' },
+          horzLines: { color: '#2B2B43' },
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+        },
+      });
 
-    priceLineSeries = chart.addLineSeries({
-      color: '#2962FF',
-      lineWidth: 2,
-    });
+      priceLineSeries = chart.addLineSeries({
+        color: '#2962FF',
+        lineWidth: 2,
+      });
 
-    // Create a separate series for markers
-    tradeMarkerSeries = chart.addLineSeries({
-      color: 'rgba(0, 0, 0, 0)',
-      lineWidth: 2,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    });
+      // Create a separate series for markers
+      tradeMarkerSeries = chart.addLineSeries({
+        color: 'rgba(0, 0, 0, 0)',
+        lineWidth: 2,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
 
-    // Handle window resize
-    const resizeChart = () => {
-      if (chartContainer && chart) {
-        const { width, height } = chartContainer.getBoundingClientRect();
-        chart.applyOptions({ width, height });
-      }
-    };
-    window.addEventListener('resize', resizeChart);
-    resizeChart();
+      // Handle window resize
+      const resizeChart = () => {
+        if (chartContainer && chart) {
+          const { width, height } = chartContainer.getBoundingClientRect();
+          chart.applyOptions({ width, height });
+        }
+      };
+      window.addEventListener('resize', resizeChart);
+      resizeChart();
 
-    return () => {
-      window.removeEventListener('resize', resizeChart);
-      chart.remove();
-    };
+      return () => {
+        window.removeEventListener('resize', resizeChart);
+        chart.remove();
+      };
+    } catch (err) {
+      logger.error('Failed to initialize chart', {
+        error: err instanceof Error ? err : new Error(String(err)),
+        component: 'BacktestPage'
+      });
+      errorMessage = 'Failed to initialize chart';
+    }
   });
 
   async function startBacktest() {
     isRunning = true;
+    errorMessage = null;
+
     try {
+      logger.info('Starting backtest', {
+        config,
+        component: 'BacktestPage'
+      });
+
       config.dataSource.simulation = { ...simulation };
       const { historicalData, trades, metrics } = await runBacktest(config);
       
@@ -119,9 +137,18 @@
         percentagePnL: metrics.percentagePnL.toFixed(2),
         averagePosition: metrics.averagePosition,
       };
-    } catch (error) {
-      console.error('Backtest failed:', error);
-      alert('Backtest failed. Check console for details.');
+
+      logger.info('Backtest completed', {
+        metrics,
+        component: 'BacktestPage'
+      });
+    } catch (err) {
+      logger.error('Backtest failed', {
+        error: err instanceof Error ? err : new Error(String(err)),
+        config,
+        component: 'BacktestPage'
+      });
+      errorMessage = err instanceof Error ? err.message : 'Backtest failed';
     } finally {
       isRunning = false;
     }
@@ -130,6 +157,12 @@
 
 <div class="container mx-auto p-4">
   <h1 class="text-2xl font-bold mb-4">Backtest Visualization</h1>
+
+  {#if errorMessage}
+    <div class="bg-red-900 text-white p-4 rounded mb-4">
+      Error: {errorMessage}
+    </div>
+  {/if}
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <div class="bg-gray-800 p-4 rounded">
