@@ -15,7 +15,7 @@
     <div class="flex justify-between items-center mb-4">
       <h3 class="text-xl font-semibold">Trading History</h3>
       <button
-        on:click={onClose}
+        onclick={onClose}
         class="text-gray-500 hover:text-gray-700"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

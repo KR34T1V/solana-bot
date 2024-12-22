@@ -1,16 +1,11 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   
-  interface $$Props {
-    show: boolean;
-    onClose: () => void;
-  }
-
-  let { show, onClose } = $props<$$Props>();
-  let form = $state<{ error?: string }>();
+  const props = $props();
+  const error = $state(undefined);
 </script>
 
-<div class:hidden={!show} class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+<div class:hidden={!props.show} class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
   <div class="bg-white rounded-lg p-6 w-full max-w-md">
     <h3 class="text-xl font-semibold mb-4">Create New Strategy</h3>
     
@@ -48,15 +43,15 @@
           ></textarea>
         </div>
 
-        {#if form?.error}
-          <p class="text-red-500 text-sm">{form.error}</p>
+        {#if error}
+          <p class="text-red-500 text-sm">{error}</p>
         {/if}
         
         <div class="flex justify-end space-x-3">
           <button
             type="button"
-            on:click={onClose}
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            onclick={props.onClose}
+            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm"
           >
             Cancel
           </button>

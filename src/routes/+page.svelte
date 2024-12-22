@@ -6,7 +6,7 @@
   import CreateTradeModal from '$lib/components/modals/CreateTradeModal.svelte';
   import HistoryModal from '$lib/components/modals/HistoryModal.svelte';
 
-  let { data } = $props<{ data: PageData }>();
+  const props = $props();
 
   let showCreateStrategyModal = $state(false);
   let showCreateTradeModal = $state(false);
@@ -36,9 +36,9 @@
 
   // Initialize store with server data
   $effect(() => {
-    tradingStore.setTrades(data.trades);
-    tradingStore.setStrategies(data.strategies);
-    tradingStore.setStats(data.stats);
+    tradingStore.setTrades(props.data.trades);
+    tradingStore.setStrategies(props.data.strategies);
+    tradingStore.setStats(props.data.stats);
   });
 </script>
 
@@ -71,20 +71,20 @@
   <!-- Action Buttons -->
   <div class="flex space-x-4 mb-8">
     <button
-      on:click={() => showCreateStrategyModal = true}
-      class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+      onclick={() => showCreateStrategyModal = true}
+      class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
     >
       Create Strategy
     </button>
     <button
-      on:click={() => showCreateTradeModal = true}
-      class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+      onclick={() => showCreateTradeModal = true}
+      class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
     >
       Create Trade
     </button>
     <button
-      on:click={() => showHistoryModal = true}
-      class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+      onclick={() => showHistoryModal = true}
+      class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
     >
       View History
     </button>
