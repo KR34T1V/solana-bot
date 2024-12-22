@@ -1,6 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { validateStrategyConfig, validateStrategyName } from '$lib/server/validation';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   if (!locals.userId) {
@@ -84,6 +85,21 @@ export const actions = {
       return { success: false, error: 'Missing required fields' };
     }
 
+    // Validate strategy name
+    const nameError = validateStrategyName(name);
+    if (nameError) {
+      return { success: false, error: nameError.message };
+    }
+
+    // Validate strategy configuration
+    const validationResult = validateStrategyConfig(type, config);
+    if (!validationResult.isValid) {
+      return {
+        success: false,
+        error: validationResult.errors.map(e => `${e.field}: ${e.message}`).join(', ')
+      };
+    }
+
     try {
       // Create a new version
       const newVersion = strategy.currentVersion + 1;
@@ -145,6 +161,21 @@ export const actions = {
 
       if (version.strategy.userId !== locals.userId) {
         return { success: false, error: 'Not authorized to revert this strategy' };
+      }
+
+      // Validate strategy name
+      const nameError = validateStrategyName(version.name);
+      if (nameError) {
+        return { success: false, error: nameError.message };
+      }
+
+      // Validate strategy configuration
+      const validationResult = validateStrategyConfig(version.type, version.config);
+      if (!validationResult.isValid) {
+        return {
+          success: false,
+          error: validationResult.errors.map(e => `${e.field}: ${e.message}`).join(', ')
+        };
       }
 
       // Create a new version based on the reverted version

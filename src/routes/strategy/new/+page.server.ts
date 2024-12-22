@@ -1,9 +1,9 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { prisma } from '$lib/server/prisma';
+import { validateStrategyConfig, validateStrategyName } from '$lib/server/validation';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  // Check if user is authenticated
   if (!locals.userId) {
     throw redirect(302, '/auth/login');
   }
@@ -54,14 +54,47 @@ export const actions = {
       return { success: false, error: 'Missing required fields' };
     }
 
+    // Validate strategy name
+    const nameError = validateStrategyName(name);
+    if (nameError) {
+      return { success: false, error: nameError.message };
+    }
+
+    // Validate strategy configuration
+    const validationResult = validateStrategyConfig(type, config);
+    if (!validationResult.isValid) {
+      return {
+        success: false,
+        error: validationResult.errors.map(e => `${e.field}: ${e.message}`).join(', ')
+      };
+    }
+
     try {
-      const strategy = await prisma.strategy.create({
-        data: {
-          name,
-          type,
-          config,
-          userId: locals.userId
-        }
+      // Create initial version (v1)
+      const strategy = await prisma.$transaction(async (tx) => {
+        // Create strategy
+        const newStrategy = await tx.strategy.create({
+          data: {
+            name,
+            type,
+            config,
+            userId: locals.userId
+          }
+        });
+
+        // Create initial version
+        await tx.strategyVersion.create({
+          data: {
+            version: 1,
+            name,
+            type,
+            config,
+            changes: 'Initial version',
+            strategyId: newStrategy.id
+          }
+        });
+
+        return newStrategy;
       });
 
       return { success: true, strategy };
