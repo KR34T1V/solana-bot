@@ -65,24 +65,43 @@
     return `${formatDate(start)} to ${formatDate(end)} (${days} days)`;
   }
 
-  function parsePerformance(performanceJson: string | null) {
-    if (!performanceJson) return null;
-    try {
-      return JSON.parse(performanceJson);
-    } catch (e) {
-      console.error('Error parsing performance data:', e);
-      return null;
+  function parsePerformance(performanceData: any) {
+    if (!performanceData) return null;
+    // Data is already parsed, just validate the structure
+    if (typeof performanceData === 'object' && performanceData.timeframes) {
+      return performanceData;
     }
+    // If it's a string (shouldn't happen now), try to parse it
+    if (typeof performanceData === 'string') {
+      try {
+        return JSON.parse(performanceData);
+      } catch (e) {
+        console.error('Error parsing performance data:', e);
+        return null;
+      }
+    }
+    return null;
   }
 
-  function parseResults(resultsJson: string | null) {
-    if (!resultsJson) return { totalTrades: 0, profitableTrades: 0 };
-    try {
-      return JSON.parse(resultsJson);
-    } catch (e) {
-      console.error('Error parsing results data:', e);
-      return { totalTrades: 0, profitableTrades: 0 };
+  function parseResults(resultsData: any) {
+    if (!resultsData) return { totalTrades: 0, profitableTrades: 0 };
+    // Data is already parsed, just validate the structure
+    if (typeof resultsData === 'object') {
+      return {
+        totalTrades: resultsData.totalTrades || 0,
+        profitableTrades: resultsData.profitableTrades || 0
+      };
     }
+    // If it's a string (shouldn't happen now), try to parse it
+    if (typeof resultsData === 'string') {
+      try {
+        return JSON.parse(resultsData);
+      } catch (e) {
+        console.error('Error parsing results data:', e);
+        return { totalTrades: 0, profitableTrades: 0 };
+      }
+    }
+    return { totalTrades: 0, profitableTrades: 0 };
   }
 
   $: performance = parsePerformance(currentVersion?.performance);

@@ -1,19 +1,15 @@
 import { redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { prisma } from '$lib/server/prisma';
+import type { PrismaClient } from '@prisma/client';
 
-interface Backtest {
-  id: string;
-  strategyId: string;
-  pair: string;
-  timeframe: string;
-  startDate: Date;
-  endDate: Date;
-  config: string | null;
-  results: string | null;
-  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
-  createdAt: Date;
-  updatedAt: Date;
+type Strategy = NonNullable<Awaited<ReturnType<PrismaClient['strategy']['findUnique']>>>;
+type StrategyVersion = NonNullable<Awaited<ReturnType<PrismaClient['strategyVersion']['findUnique']>>>;
+type Backtest = NonNullable<Awaited<ReturnType<PrismaClient['backtest']['findUnique']>>>;
+
+interface StrategyWithRelations extends Strategy {
+  versions: StrategyVersion[];
+  backtests: Backtest[];
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -38,7 +34,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         }
       }
     }
-  });
+  }) as StrategyWithRelations | null;
 
   if (!strategy) {
     throw error(404, 'Strategy not found');
@@ -48,24 +44,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     throw error(403, 'Not authorized to view this strategy');
   }
 
-  // Update the version query to get the current version
-  const currentVersion = await prisma.strategyVersion.findUnique({
+  // Update the versions query with the current version
+  strategy.versions = await prisma.strategyVersion.findMany({
     where: {
-      strategyId_version: {
-        strategyId: strategy.id,
-        version: strategy.currentVersion
-      }
+      strategyId: strategy.id,
+      version: strategy.currentVersion
     }
   });
 
+  const currentVersion = strategy.versions[0];
   if (!currentVersion) {
     throw error(404, 'Strategy version not found');
   }
 
-  // Parse JSON fields
+  // Parse backtest results
   const parsedBacktests = strategy.backtests.map((backtest: Backtest) => ({
     ...backtest,
-    config: backtest.config ? JSON.parse(backtest.config) : null,
     results: backtest.results ? JSON.parse(backtest.results) : null
   }));
 
@@ -76,8 +70,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     },
     currentVersion: {
       ...currentVersion,
-      config: currentVersion.config ? JSON.parse(currentVersion.config) : null,
-      performance: currentVersion.performance ? JSON.parse(currentVersion.performance) : null
+      // Only parse config and performance if they're strings
+      config: typeof currentVersion.config === 'string' ? JSON.parse(currentVersion.config) : currentVersion.config,
+      performance: typeof currentVersion.performance === 'string' ? JSON.parse(currentVersion.performance) : currentVersion.performance
     },
     backtests: parsedBacktests
   };

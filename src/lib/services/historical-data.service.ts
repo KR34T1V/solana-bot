@@ -1,13 +1,25 @@
-import { PrismaClient, type HistoricalPrice } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import type { TimeFrame } from '$lib/types';
 
 const prisma = new PrismaClient();
+
+type HistoricalPriceInput = {
+    pair: string;
+    timestamp: Date;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    source: string;
+    timeframe: string;
+};
 
 export class HistoricalDataService {
     /**
      * Upserts historical price data
      */
-    async upsertPrice(data: Omit<HistoricalPrice, 'id' | 'createdAt'>) {
+    async upsertPrice(data: HistoricalPriceInput) {
         return prisma.historicalPrice.upsert({
             where: {
                 pair_timestamp_timeframe: {
@@ -24,7 +36,7 @@ export class HistoricalDataService {
     /**
      * Batch upsert historical price data
      */
-    async batchUpsertPrices(data: Omit<HistoricalPrice, 'id' | 'createdAt'>[]) {
+    async batchUpsertPrices(data: HistoricalPriceInput[]) {
         return prisma.$transaction(
             data.map((price) =>
                 prisma.historicalPrice.upsert({
