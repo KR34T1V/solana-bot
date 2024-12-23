@@ -1,12 +1,33 @@
 export interface BirdeyeTokenPrice {
     value: number;
     updateUnixTime: number;
-    updateTime: string;
+}
+
+export interface BirdeyePriceResponse {
+    success: boolean;
+    data: BirdeyeTokenPrice;
+    message?: string;
+}
+
+export interface BirdeyePairInfo {
+    address: string;
+    name: string;
+    baseToken: string;
+    quoteToken: string;
+    baseTokenSymbol: string;
+    quoteTokenSymbol: string;
+    volume24h: number;
+    priceChange24h: number;
+}
+
+export interface BirdeyePairResponse {
+    success: boolean;
+    data: BirdeyePairInfo;
+    message?: string;
 }
 
 export interface BirdeyeOHLCV {
     unixTime: number;
-    time: string;
     open: number;
     high: number;
     low: number;
@@ -14,39 +35,10 @@ export interface BirdeyeOHLCV {
     volume: number;
 }
 
-export interface BirdeyeTokenInfo {
-    address: string;
-    symbol: string;
-    decimals: number;
-    name: string;
-    icon: string;
-}
-
-export interface BirdeyePairInfo {
-    pair_address: string;
-    base_token: BirdeyeTokenInfo;
-    quote_token: BirdeyeTokenInfo;
-    liquidity: number;
-    volume_24h: number;
-}
-
-// API Response Types
-export interface BirdeyePriceResponse {
-    data: Record<string, BirdeyeTokenPrice>;
-    success: boolean;
-    timestamp: number;
-}
-
 export interface BirdeyeOHLCVResponse {
+    success: boolean;
     data: {
         items: BirdeyeOHLCV[];
     };
-    success: boolean;
-    timestamp: number;
-}
-
-export interface BirdeyePairResponse {
-    data: BirdeyePairInfo;
-    success: boolean;
-    timestamp: number;
+    message?: string;
 } 

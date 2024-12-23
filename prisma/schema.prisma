@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,87 +8,78 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
+  id         String       @id @default(cuid())
+  email      String       @unique
+  password   String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  apiKeys    ApiKey[]
   strategies Strategy[]
-  bots      TradingBot[]
+  bots       TradingBot[]
 }
 
 model Strategy {
-  id             String   @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String
   type           String
   config         String
-  currentVersion Int      @default(1)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  // Relations
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId   String
-  versions StrategyVersion[]
-  backtests Backtest[]
-  bots     TradingBot[]
+  currentVersion Int               @default(1)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  userId         String
+  backtests      Backtest[]
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions       StrategyVersion[]
+  bots           TradingBot[]
 
   @@index([userId])
 }
 
 model StrategyVersion {
-  id        String   @id @default(cuid())
-  version   Int
-  name      String
-  type      String
-  config    String
-  changes   String
-  createdAt DateTime @default(now())
-
-  // Performance metrics
-  performance String? // Stores metrics for different timeframes as JSON string
-  backtestResults String? // Stores backtest results if any were run as JSON string
-  lastTestedAt DateTime?
-
-  // Relations
-  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
-  strategyId String
+  id              String    @id @default(cuid())
+  version         Int
+  name            String
+  type            String
+  config          String
+  changes         String
+  createdAt       DateTime  @default(now())
+  performance     String?
+  backtestResults String?
+  lastTestedAt    DateTime?
+  strategyId      String
+  strategy        Strategy  @relation(fields: [strategyId], references: [id], onDelete: Cascade)
 
   @@unique([strategyId, version])
 }
 
 model Backtest {
-  id        String   @id @default(cuid())
-  startDate DateTime
-  endDate   DateTime
-  pair      String   // Trading pair (e.g., "SOL/USDC")
-  timeframe String   // Timeframe (e.g., "1h", "4h", "1d")
-  config    String   // JSON containing backtest parameters
-  results   String   // JSON containing backtest results
-  status    String   // PENDING, RUNNING, COMPLETED, FAILED
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  startDate  DateTime
+  endDate    DateTime
+  pair       String
+  timeframe  String
+  config     String
+  results    String
+  status     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   strategyId String
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
 
   @@index([strategyId])
 }
 
 model HistoricalPrice {
   id        String   @id @default(cuid())
-  pair      String   // Trading pair (e.g., "SOL/USDC")
+  pair      String
   timestamp DateTime
   open      Float
   high      Float
   low       Float
   close     Float
   volume    Float
-  source    String   // "birdeye" or other data sources
-  timeframe String   // "1m", "5m", "15m", "1h", "4h", "1d"
+  source    String
+  timeframe String
   createdAt DateTime @default(now())
 
   @@unique([pair, timestamp, timeframe])
@@ -100,20 +88,18 @@ model HistoricalPrice {
 }
 
 model TradingBot {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
-  status      String   // ACTIVE, PAUSED, STOPPED
-  config      String   // JSON containing bot configuration
+  status      String
+  config      String
   lastTradeAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   userId      String
-  strategy    Strategy  @relation(fields: [strategyId], references: [id])
   strategyId  String
   trades      Trade[]
+  strategy    Strategy       @relation(fields: [strategyId], references: [id])
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   wallet      VirtualWallet?
 
   @@index([userId])
@@ -121,70 +107,77 @@ model TradingBot {
 }
 
 model VirtualWallet {
-  id            String   @id @default(cuid())
-  balance       Float    @default(0)
-  totalDeposits Float    @default(0)
-  totalWithdraws Float   @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
-  bot          TradingBot @relation(fields: [botId], references: [id], onDelete: Cascade)
-  botId        String     @unique
-  positions    Position[]
-  transactions Transaction[]
+  id             String        @id @default(cuid())
+  balance        Float         @default(0)
+  totalDeposits  Float         @default(0)
+  totalWithdraws Float         @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  botId          String        @unique
+  positions      Position[]
+  transactions   Transaction[]
+  bot            TradingBot    @relation(fields: [botId], references: [id], onDelete: Cascade)
 }
 
 model Position {
-  id        String   @id @default(cuid())
-  pair      String
-  side      String   // LONG or SHORT
-  size      Float
-  entryPrice Float
+  id           String        @id @default(cuid())
+  pair         String
+  side         String
+  size         Float
+  entryPrice   Float
   currentPrice Float?
-  pnl       Float?
-  status    String   // OPEN or CLOSED
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  closedAt  DateTime?
-
-  // Relations
-  wallet    VirtualWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  walletId  String
+  pnl          Float?
+  status       String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  closedAt     DateTime?
+  walletId     String
+  wallet       VirtualWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
 }
 
 model Trade {
-  id          String   @id @default(cuid())
-  pair        String
-  side        String   // BUY or SELL
-  type        String   // MARKET or LIMIT
-  amount      Float
-  price       Float
-  status      String   // PENDING, EXECUTED, FAILED, CANCELLED
-  createdAt   DateTime @default(now())
-  executedAt  DateTime?
-  
-  // Relations
-  bot        TradingBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  id         String     @id @default(cuid())
+  pair       String
+  side       String
+  type       String
+  amount     Float
+  price      Float
+  status     String
+  createdAt  DateTime   @default(now())
+  executedAt DateTime?
   botId      String
+  bot        TradingBot @relation(fields: [botId], references: [id], onDelete: Cascade)
 
   @@index([botId])
 }
 
 model Transaction {
-  id        String   @id @default(cuid())
-  type      String   // DEPOSIT, WITHDRAW, TRADE
+  id        String        @id @default(cuid())
+  type      String
   amount    Float
   currency  String
-  status    String   // PENDING, COMPLETED, FAILED
-  metadata  String?  // Additional JSON data
-  createdAt DateTime @default(now())
-
-  // Relations
-  wallet    VirtualWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  status    String
+  metadata  String?
+  createdAt DateTime      @default(now())
   walletId  String
+  wallet    VirtualWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
-} 
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  key       String
+  provider  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
