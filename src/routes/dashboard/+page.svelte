@@ -1,106 +1,113 @@
 <script lang="ts">
   import type { PageData } from './$types';
-  
+  import { formatDistanceToNow } from 'date-fns';
+
   export let data: PageData;
-  
-  $: stats = data.stats;
+
+  const defaultData = {
+    stats: {
+      totalStrategies: 0,
+      activeStrategies: 0,
+      totalBacktests: 0,
+      successfulBacktests: 0,
+      latestStrategies: []
+    },
+    pendingBacktests: []
+  };
+
+  $: ({ stats = defaultData.stats, pendingBacktests = defaultData.pendingBacktests } = data);
 </script>
 
-<svelte:head>
-  <title>Dashboard - Solana Bot</title>
-</svelte:head>
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-8">Dashboard</h1>
 
-<div class="py-6">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
-    
-    <div class="mt-6 grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-      <!-- Active Strategies -->
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Active Strategies</dt>
-                <dd class="flex items-baseline">
-                  <div class="text-2xl font-semibold text-gray-900">{stats.activeStrategies}</div>
-                </dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Active Bots -->
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Active Bots</dt>
-                <dd class="flex items-baseline">
-                  <div class="text-2xl font-semibold text-gray-900">{stats.activeBots}</div>
-                </dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Total Trades -->
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Total Trades</dt>
-                <dd class="flex items-baseline">
-                  <div class="text-2xl font-semibold text-gray-900">{stats.totalTrades}</div>
-                </dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Successful Trades -->
-      <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Successful Trades</dt>
-                <dd class="flex items-baseline">
-                  <div class="text-2xl font-semibold text-gray-900">{stats.successfulTrades}</div>
-                  <div class="ml-2 flex items-baseline text-sm font-semibold text-green-600">
-                    {((stats.successfulTrades / stats.totalTrades) * 100).toFixed(1)}%
-                  </div>
-                </dd>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </div>
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold text-gray-600">Total Strategies</h3>
+      <p class="text-3xl font-bold">{stats.totalStrategies}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold text-gray-600">Active Strategies</h3>
+      <p class="text-3xl font-bold">{stats.activeStrategies}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold text-gray-600">Total Backtests</h3>
+      <p class="text-3xl font-bold">{stats.totalBacktests}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold text-gray-600">Successful Backtests</h3>
+      <p class="text-3xl font-bold">{stats.successfulBacktests}</p>
     </div>
   </div>
+
+  <!-- Pending Backtests -->
+  {#if pendingBacktests.length > 0}
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+      <h2 class="text-xl font-bold mb-4">Pending Backtests</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Strategy</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {#each pendingBacktests as backtest}
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {backtest.strategy?.name ?? 'Unknown Strategy'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatDistanceToNow(new Date(backtest.createdAt), { addSuffix: true })}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    Running
+                  </span>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Latest Strategies -->
+  {#if stats.latestStrategies?.length > 0}
+    <div class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-bold mb-4">Latest Strategies</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Backtests</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Versions</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {#each stats.latestStrategies as strategy}
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <a href="/strategy/{strategy.id}" class="text-blue-600 hover:text-blue-900">{strategy.name}</a>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{strategy.type}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatDistanceToNow(new Date(strategy.createdAt), { addSuffix: true })}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{strategy.backtestCount}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{strategy.versions}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {/if}
 </div> 

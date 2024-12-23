@@ -7,104 +7,74 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  strategies    Strategy[]
-  bots          Bot[]
-  backtests     Backtest[]
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  strategies Strategy[]
 }
 
 model Strategy {
-  id            String    @id @default(cuid())
-  name          String
-  type          String    // e.g., "MEAN_REVERSION", "TREND_FOLLOWING"
-  config        String    // Strategy-specific configuration as JSON string
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  bots          Bot[]
-  backtests     Backtest[]
-  versions      StrategyVersion[]
+  id             String   @id @default(cuid())
+  name           String
+  type           String
+  config         String
   currentVersion Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  versions StrategyVersion[]
+  backtests Backtest[]
+
+  @@index([userId])
 }
 
 model StrategyVersion {
-  id          String    @id @default(cuid())
-  version     Int       // Version number
-  name        String    // Strategy name at this version
-  type        String    // Strategy type at this version
-  config      String    // Strategy configuration at this version
-  changes     String    // Description of changes in this version
-  createdAt   DateTime  @default(now())
-  strategyId  String
-  strategy    Strategy  @relation(fields: [strategyId], references: [id], onDelete: Cascade)
-  backtests   Backtest[]
+  id        String   @id @default(cuid())
+  version   Int
+  name      String
+  type      String
+  config    String
+  changes   String
+  createdAt DateTime @default(now())
+
+  // Performance metrics
+  performance String? // Stores metrics for different timeframes as JSON string
+  backtestResults String? // Stores backtest results if any were run as JSON string
+  lastTestedAt DateTime?
+
+  // Relations
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  strategyId String
 
   @@unique([strategyId, version])
 }
 
-model Bot {
-  id          String    @id @default(cuid())
-  name        String
-  status      String    // "ACTIVE", "PAUSED", "STOPPED"
-  config      String    // Bot-specific configuration as JSON string
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  strategyId  String
-  strategy    Strategy  @relation(fields: [strategyId], references: [id])
-  trades      Trade[]
-}
-
-model Trade {
-  id          String    @id @default(cuid())
-  type        String    // "BUY", "SELL"
-  token       String    // Token symbol
-  amount      Float
-  price       Float
-  status      String    // "PENDING", "COMPLETED", "FAILED"
-  txHash      String?   // Solana transaction hash
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  botId       String
-  bot         Bot       @relation(fields: [botId], references: [id])
-}
-
 model Backtest {
-  id              String    @id @default(cuid())
-  pair            String    // Trading pair (e.g., "SOL-USDC")
-  timeframe       String    // Timeframe (e.g., "1h", "4h", "1d")
-  startDate       DateTime
-  endDate         DateTime
-  initialBalance  Float
-  status          String    // "RUNNING", "COMPLETED", "FAILED"
-  results         String    // Backtest results including metrics as JSON string
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  strategyId      String
-  strategy        Strategy  @relation(fields: [strategyId], references: [id])
-  versionId       String?
-  version         StrategyVersion? @relation(fields: [versionId], references: [id])
-}
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  pair      String   // Trading pair (e.g., "SOL/USDC")
+  timeframe String   // Timeframe (e.g., "1h", "4h", "1d")
+  config    String   // JSON containing backtest parameters
+  results   String   // JSON containing backtest results
+  status    String   // PENDING, RUNNING, COMPLETED, FAILED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-model PriceData {
-  id          String    @id @default(cuid())
-  token       String    // Token symbol
-  price       Float
-  volume      Float
-  timestamp   DateTime
-  source      String    // "BIRDEYE"
+  // Relations
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  strategyId String
 
-  @@index([token, timestamp])
+  @@index([strategyId])
 } 

@@ -35,7 +35,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const user = await prisma.user.create({
       data: {
         email,
-        passwordHash: hashPassword(password),
+        password: hashPassword(password),
       },
     });
 
@@ -49,7 +49,14 @@ export const POST: RequestHandler = async ({ request }) => {
       .setExpirationTime('24h')
       .sign(secret);
 
-    return json({ token });
+    // Create response with token cookie
+    const response = json({ token });
+    response.headers.set(
+      'Set-Cookie',
+      `token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`
+    );
+
+    return response;
   } catch (error) {
     logError(error as Error, { path: '/api/auth/register' });
     return json(

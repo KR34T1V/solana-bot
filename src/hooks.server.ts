@@ -21,18 +21,13 @@ export const handle: Handle = async ({ event, resolve }) => {
       return response;
     }
 
-    // Try to get token from Authorization header first, then from cookies
-    let token = event.request.headers.get('Authorization')?.slice(7); // Remove 'Bearer '
-    
-    if (!token) {
-      // Try to get token from cookies
-      const cookies = event.request.headers.get('cookie');
-      if (cookies) {
-        const tokenCookie = cookies.split(';').find(c => c.trim().startsWith('token='));
-        if (tokenCookie) {
-          token = tokenCookie.split('=')[1].trim();
-        }
-      }
+    // Get token from cookies first, then from Authorization header
+    let token: string | undefined;
+    const cookies = event.cookies.get('token');
+    if (cookies) {
+      token = cookies;
+    } else {
+      token = event.request.headers.get('Authorization')?.slice(7); // Remove 'Bearer '
     }
 
     if (!token) {
@@ -45,7 +40,8 @@ export const handle: Handle = async ({ event, resolve }) => {
       }
       // For page routes, let the page handle the auth check
       event.locals.userId = null;
-      return resolve(event);
+      const response = await resolve(event);
+      return response;
     }
 
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
@@ -80,6 +76,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     // For page routes, let the page handle the auth error
     event.locals.userId = null;
-    return resolve(event);
+    const response = await resolve(event);
+    return response;
   }
 }; 

@@ -1,65 +1,87 @@
 <script lang="ts">
   import '../app.css';
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  
-  let isAuthenticated = false;
-  
+  import { onMount } from 'svelte';
+  import { invalidate } from '$app/navigation';
+  import { goto } from '$app/navigation';
+  import { derived } from 'svelte/store';
+
+  // Create a derived store for auth state
+  const isLoggedIn = derived(page, $page => $page.data.userId != null);
+
+  // Handle logout
+  async function handleLogout(e: Event) {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    await fetch(form.action, { method: 'POST' });
+    await invalidate('app:auth');
+    goto('/auth/login');
+  }
+
+  // Revalidate page data on mount and after navigation
   onMount(() => {
-    // Check authentication status
-    const token = localStorage.getItem('token');
-    isAuthenticated = !!token;
+    invalidate('app:auth');
   });
 </script>
 
 <div class="min-h-screen bg-gray-100">
-  <nav class="bg-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4">
+  <!-- Navigation -->
+  <nav class="bg-white shadow">
+    <div class="container mx-auto px-4">
       <div class="flex justify-between h-16">
         <div class="flex">
           <div class="flex-shrink-0 flex items-center">
-            <a href="/" class="text-xl font-bold text-primary-600">Solana Bot</a>
+            <a href="/" class="text-xl font-bold text-gray-800">
+              Solana Bot
+            </a>
           </div>
-          
-          {#if isAuthenticated}
-            <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <a
-                href="/dashboard"
-                class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                class:border-primary-500={$page.url.pathname === '/dashboard'}
-                class:text-primary-600={$page.url.pathname === '/dashboard'}
-              >
-                Dashboard
-              </a>
-              <a
-                href="/strategy"
-                class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                class:border-primary-500={$page.url.pathname.startsWith('/strategy')}
-                class:text-primary-600={$page.url.pathname.startsWith('/strategy')}
-              >
-                Strategies
-              </a>
-            </div>
-          {/if}
         </div>
-        
+
         <div class="flex items-center">
-          {#if isAuthenticated}
-            <button
-              on:click={() => {
-                localStorage.removeItem('token');
-                window.location.href = '/auth/login';
-              }}
-              class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          {#if $isLoggedIn}
+            <a
+              href="/dashboard"
+              class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
             >
-              Logout
-            </button>
+              Dashboard
+            </a>
+            <a
+              href="/strategy"
+              class="ml-4 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+            >
+              Strategies
+            </a>
+            <a
+              href="/strategy/new"
+              class="ml-4 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+            >
+              New Strategy
+            </a>
+            <form 
+              action="/api/auth/logout" 
+              method="POST" 
+              class="ml-4"
+              on:submit={handleLogout}
+            >
+              <button
+                type="submit"
+                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              >
+                Logout
+              </button>
+            </form>
           {:else}
             <a
               href="/auth/login"
-              class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
             >
               Login
+            </a>
+            <a
+              href="/auth/register"
+              class="ml-4 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+            >
+              Register
             </a>
           {/if}
         </div>
@@ -67,7 +89,8 @@
     </div>
   </nav>
 
-  <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+  <!-- Page Content -->
+  <main>
     <slot />
   </main>
 </div> 

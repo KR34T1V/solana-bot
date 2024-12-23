@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { prisma } from '$lib/server/prisma';
 import { validateStrategyConfig, validateStrategyName } from '$lib/server/validation';
+import type { PrismaClient } from '@prisma/client';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.userId) {
@@ -45,6 +46,16 @@ export const actions = {
       throw redirect(302, '/auth/login');
     }
 
+    // Verify user exists
+    const user = await prisma.user.findUnique({
+      where: { id: locals.userId }
+    });
+
+    if (!user) {
+      console.error('User not found:', locals.userId);
+      return { success: false, error: 'User not found' };
+    }
+
     const formData = await request.formData();
     const name = formData.get('name') as string;
     const type = formData.get('type') as string;
@@ -71,14 +82,15 @@ export const actions = {
 
     try {
       // Create initial version (v1)
-      const strategy = await prisma.$transaction(async (tx) => {
+      const strategy = await prisma.$transaction(async (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>) => {
         // Create strategy
         const newStrategy = await tx.strategy.create({
           data: {
             name,
             type,
             config,
-            userId: locals.userId
+            userId: user.id,
+            currentVersion: 1
           }
         });
 
@@ -98,8 +110,11 @@ export const actions = {
       });
 
       return { success: true, strategy };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Strategy creation error:', error);
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2003') {
+        return { success: false, error: 'Invalid user or strategy relationship' };
+      }
       return { success: false, error: 'Failed to create strategy' };
     }
   }
