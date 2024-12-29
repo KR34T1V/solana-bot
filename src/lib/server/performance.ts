@@ -49,7 +49,20 @@ export function calculateVersionPerformance(backtests: Array<{
   endDate: Date;
   results: string | null;
   status: string;
-}>): PerformanceMetrics {
+}> | undefined): PerformanceMetrics {
+  if (!backtests || backtests.length === 0) {
+    return {
+      timeframes: {},
+      overall: {
+        totalBacktests: 0,
+        bestTimeframe: '',
+        worstTimeframe: '',
+        averageWinRate: 0,
+        averageSharpeRatio: 0
+      }
+    };
+  }
+
   const timeframeResults = new Map<string, BacktestResult[]>();
 
   // Group backtest results by timeframe

@@ -106,29 +106,32 @@ describe('Strategy Edit Page Server', () => {
 
   describe('load', () => {
     it('should load strategy and versions', async () => {
-      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategy)
-      vi.mocked(prisma.strategyVersion.findMany).mockResolvedValueOnce([mockStrategyVersion])
+      const mockStrategyWithVersions = {
+        ...mockStrategy,
+        versions: [mockStrategyVersion]
+      };
 
-      const result = await load(createMockLoadEvent('user-1', 'strategy-1'))
+      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategyWithVersions);
+
+      const result = await load(createMockLoadEvent('user-1', 'strategy-1'));
 
       expect(result).toEqual({
-        strategy: mockStrategy,
-        versions: [mockStrategyVersion],
+        strategy: mockStrategyWithVersions,
         strategyTypes: expect.arrayContaining([
           expect.objectContaining({
             id: 'MEAN_REVERSION'
           })
         ])
-      })
+      });
 
       expect(prisma.strategy.findUnique).toHaveBeenCalledWith({
-        where: { id: 'strategy-1' }
-      })
-
-      expect(prisma.strategyVersion.findMany).toHaveBeenCalledWith({
-        where: { strategyId: 'strategy-1' },
-        orderBy: { version: 'desc' }
-      })
+        where: { id: 'strategy-1' },
+        include: {
+          versions: {
+            orderBy: { version: 'desc' }
+          }
+        }
+      });
     })
 
     it('should handle strategy not found', async () => {

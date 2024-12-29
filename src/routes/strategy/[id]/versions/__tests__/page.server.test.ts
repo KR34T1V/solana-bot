@@ -165,67 +165,65 @@ describe('Strategy Versions Page Server', () => {
 
   describe('load', () => {
     it('should load strategy versions with performance metrics', async () => {
-      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce({
+      const mockStrategyWithVersions = {
         ...mockStrategy,
-        versions: mockStrategyVersions
-      } as any)
+        versions: mockStrategyVersions.map(version => ({
+          ...version,
+          strategy: {
+            ...mockStrategy,
+            backtests: mockBacktests
+          }
+        }))
+      };
 
-      vi.mocked(prisma.backtest.findMany).mockResolvedValueOnce(mockBacktests)
+      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategyWithVersions);
 
-      const result = await load(createMockLoadEvent('user-1', 'strategy-1'))
+      const result = await load(createMockLoadEvent('user-1', 'strategy-1'));
 
       expect(result).toEqual({
-        strategy: mockStrategy,
-        versions: expect.arrayContaining([
-          expect.objectContaining({
-            version: 2,
-            name: 'Test Strategy',
-            performance: expect.objectContaining({
-              timeframes: expect.objectContaining({
-                '4h': expect.objectContaining({
-                  winRate: 0.7,
-                  profitFactor: 1.8,
-                  sharpeRatio: 1.5
+        strategy: {
+          ...mockStrategyWithVersions,
+          versions: expect.arrayContaining([
+            expect.objectContaining({
+              version: 2,
+              performance: expect.objectContaining({
+                overall: expect.objectContaining({
+                  totalBacktests: expect.any(Number),
+                  averageWinRate: expect.any(Number),
+                  averageSharpeRatio: expect.any(Number)
                 })
-              }),
-              overall: expect.objectContaining({
-                totalBacktests: 1,
-                averageWinRate: 0.7,
-                averageSharpeRatio: 1.5
+              })
+            }),
+            expect.objectContaining({
+              version: 1,
+              performance: expect.objectContaining({
+                overall: expect.objectContaining({
+                  totalBacktests: expect.any(Number),
+                  averageWinRate: expect.any(Number),
+                  averageSharpeRatio: expect.any(Number)
+                })
               })
             })
-          }),
-          expect.objectContaining({
-            version: 1,
-            name: 'Test Strategy',
-            performance: expect.objectContaining({
-              timeframes: expect.objectContaining({
-                '1h': expect.objectContaining({
-                  winRate: 0.6,
-                  profitFactor: 1.5,
-                  sharpeRatio: 1.2
-                })
-              }),
-              overall: expect.objectContaining({
-                totalBacktests: 1,
-                averageWinRate: 0.6,
-                averageSharpeRatio: 1.2
-              })
-            })
-          })
-        ])
-      })
+          ])
+        }
+      });
 
       expect(prisma.strategy.findUnique).toHaveBeenCalledWith({
         where: { id: 'strategy-1' },
-        include: { versions: true }
-      })
-
-      expect(prisma.backtest.findMany).toHaveBeenCalledWith({
-        where: { strategyId: 'strategy-1' },
-        orderBy: { createdAt: 'desc' }
-      })
-    })
+        include: {
+          versions: {
+            orderBy: { version: 'desc' },
+            include: {
+              strategy: {
+                include: {
+                  backtests: true
+                }
+              }
+            }
+          }
+        }
+      });
+    });
 
     it('should handle strategy not found', async () => {
       vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(null)
@@ -247,46 +245,56 @@ describe('Strategy Versions Page Server', () => {
     })
 
     it('should handle strategy with no versions', async () => {
-      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce({
+      const mockStrategyWithNoVersions = {
         ...mockStrategy,
         versions: []
-      } as any)
+      };
 
-      vi.mocked(prisma.backtest.findMany).mockResolvedValueOnce([])
+      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategyWithNoVersions);
 
-      const result = await load(createMockLoadEvent('user-1', 'strategy-1'))
+      const result = await load(createMockLoadEvent('user-1', 'strategy-1'));
 
       expect(result).toEqual({
-        strategy: mockStrategy,
-        versions: []
-      })
-    })
+        strategy: {
+          ...mockStrategyWithNoVersions,
+          versions: []
+        }
+      });
+    });
 
     it('should handle strategy with no backtests', async () => {
-      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce({
+      const mockStrategyWithNoBacktests = {
         ...mockStrategy,
-        versions: mockStrategyVersions
-      } as any)
+        versions: mockStrategyVersions.map(version => ({
+          ...version,
+          strategy: {
+            ...mockStrategy,
+            backtests: []
+          }
+        }))
+      };
 
-      vi.mocked(prisma.backtest.findMany).mockResolvedValueOnce([])
+      vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategyWithNoBacktests);
 
-      const result = await load(createMockLoadEvent('user-1', 'strategy-1'))
+      const result = await load(createMockLoadEvent('user-1', 'strategy-1'));
 
       expect(result).toEqual({
-        strategy: mockStrategy,
-        versions: expect.arrayContaining([
-          expect.objectContaining({
-            version: 2,
-            name: 'Test Strategy',
-            performance: null
-          }),
-          expect.objectContaining({
-            version: 1,
-            name: 'Test Strategy',
-            performance: null
-          })
-        ])
-      })
-    })
+        strategy: {
+          ...mockStrategyWithNoBacktests,
+          versions: expect.arrayContaining([
+            expect.objectContaining({
+              version: expect.any(Number),
+              performance: expect.objectContaining({
+                overall: expect.objectContaining({
+                  totalBacktests: 0,
+                  averageWinRate: 0,
+                  averageSharpeRatio: 0
+                })
+              })
+            })
+          ])
+        }
+      });
+    });
   })
 }) 

@@ -143,9 +143,23 @@ describe('New Strategy Page Server', () => {
         }
 
         vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback) => {
-          await callback(prisma)
-          return mockStrategy
-        })
+          vi.mocked(prisma.strategy.create).mockResolvedValueOnce(mockStrategy);
+          vi.mocked(prisma.strategyVersion.create).mockResolvedValueOnce({
+            id: 'version-1',
+            version: 1,
+            name: 'Test Strategy',
+            type: 'MEAN_REVERSION',
+            config: '{"timeframe":"1h","deviationThreshold":2}',
+            changes: 'Initial version',
+            strategyId: mockStrategy.id,
+            createdAt: new Date(),
+            lastTestedAt: null,
+            performance: null,
+            backtestResults: null
+          });
+
+          return callback(prisma).then(() => mockStrategy);
+        });
 
         const formData = {
           name: 'Test Strategy',
