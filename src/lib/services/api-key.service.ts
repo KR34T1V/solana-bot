@@ -1,22 +1,79 @@
 import { PrismaClient } from '@prisma/client';
 import { env } from '$env/dynamic/private';
 import crypto from 'crypto';
-import { prisma } from '$lib/server/prisma';
 
 export class ApiKeyService {
+    private prisma: PrismaClient;
+
+    constructor(prisma: PrismaClient) {
+        this.prisma = prisma;
+    }
+
+    /**
+     * Create a new API key
+     */
+    async createApiKey(userId: string, name: string): Promise<any> {
+        try {
+            const key = crypto.randomBytes(32).toString('hex');
+            return await this.prisma.apiKey.create({
+                data: {
+                    userId,
+                    name,
+                    key: this.encryptApiKey(key),
+                    provider: 'default'
+                }
+            });
+        } catch (error) {
+            throw new Error('Failed to create API key');
+        }
+    }
+
+    /**
+     * Get all API keys for a user
+     */
+    async getApiKeys(userId: string) {
+        return this.prisma.apiKey.findMany({
+            where: { userId }
+        });
+    }
+
+    /**
+     * Delete an API key
+     */
+    async deleteApiKey(keyId: string, userId: string) {
+        try {
+            return await this.prisma.apiKey.delete({
+                where: {
+                    id: keyId,
+                    userId
+                }
+            });
+        } catch (error) {
+            throw new Error('Failed to delete API key');
+        }
+    }
+
+    /**
+     * Validate an API key
+     */
+    async validateApiKey(key: string): Promise<boolean> {
+        const apiKey = await this.prisma.apiKey.findFirst({
+            where: { key }
+        });
+        return !!apiKey;
+    }
+
     /**
      * Get active API key for a provider
      */
     async getActiveKey(userId: string, provider: string) {
-        const apiKey = await prisma.apiKey.findFirst({
+        return this.prisma.apiKey.findFirst({
             where: {
                 userId,
                 provider,
                 isActive: true
             }
         });
-
-        return apiKey;
     }
 
     /**
@@ -28,10 +85,9 @@ export class ApiKeyService {
         name: string;
         key: string;
     }) {
-        // Encrypt the API key
         const encryptedKey = this.encryptApiKey(params.key);
 
-        return prisma.apiKey.upsert({
+        return this.prisma.apiKey.upsert({
             where: {
                 userId_provider: {
                     userId: params.userId,
@@ -54,20 +110,6 @@ export class ApiKeyService {
     }
 
     /**
-     * Delete API key
-     */
-    async deleteApiKey(userId: string, provider: string) {
-        return prisma.apiKey.delete({
-            where: {
-                userId_provider: {
-                    userId,
-                    provider
-                }
-            }
-        });
-    }
-
-    /**
      * Get decrypted API key
      */
     async getDecryptedKey(userId: string, provider: string): Promise<string | null> {
@@ -84,17 +126,17 @@ export class ApiKeyService {
         const encryptionKey = env.ENCRYPTION_KEY;
         
         if (!encryptionKey) {
-            throw new Error('ENCRYPTION_KEY environment variable is not set. Please add it to your .env file.');
+            throw new Error('ENCRYPTION_KEY environment variable is not set');
         }
         
         if (encryptionKey.length !== 64) {
-            throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Generate one using: openssl rand -hex 32');
+            throw new Error('ENCRYPTION_KEY must be a 64-character hex string');
         }
         
         try {
             Buffer.from(encryptionKey, 'hex');
         } catch (e) {
-            throw new Error('ENCRYPTION_KEY must be a valid hex string. Generate one using: openssl rand -hex 32');
+            throw new Error('ENCRYPTION_KEY must be a valid hex string');
         }
     }
 
