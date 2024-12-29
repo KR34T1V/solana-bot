@@ -1,8 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { ApiKeyService } from '../api-key.service'
 import { PrismaClient } from '@prisma/client'
 import { mockDeep } from 'vitest-mock-extended'
 import type { DeepMockProxy } from 'vitest-mock-extended'
+
+vi.mock('$env/dynamic/private', () => ({
+  env: {
+    get ENCRYPTION_KEY() {
+      return process.env.ENCRYPTION_KEY
+    }
+  }
+}))
 
 describe('ApiKeyService', () => {
   let apiKeyService: ApiKeyService
@@ -274,14 +282,12 @@ describe('ApiKeyService', () => {
     it('should return decrypted key for active API key', async () => {
       const userId = '123'
       const provider = 'birdeye'
-      const encryptedKey = '1234567890abcdef:encrypted'
-      const decryptedKey = 'decrypted-key'
-
+      const originalKey = 'test-key'
       const mockApiKey = {
         id: '1',
         userId,
         name: 'Test Key',
-        key: encryptedKey,
+        key: 'encrypted:key',
         provider,
         isActive: true,
         createdAt: new Date(),
@@ -289,13 +295,11 @@ describe('ApiKeyService', () => {
       }
 
       prisma.apiKey.findFirst.mockResolvedValue(mockApiKey)
-
-      // Mock the private decryptApiKey method
-      vi.spyOn(apiKeyService as any, 'decryptApiKey').mockReturnValue(decryptedKey)
+      vi.spyOn(apiKeyService as any, 'decryptApiKey').mockReturnValue(originalKey)
 
       const result = await apiKeyService.getDecryptedKey(userId, provider)
 
-      expect(result).toBe(decryptedKey)
+      expect(result).toBe(originalKey)
       expect(prisma.apiKey.findFirst).toHaveBeenCalledWith({
         where: {
           userId,
@@ -311,6 +315,92 @@ describe('ApiKeyService', () => {
       const result = await apiKeyService.getDecryptedKey('123', 'birdeye')
 
       expect(result).toBeNull()
+    })
+  })
+
+  describe('Encryption Key Validation', () => {
+    const originalEnv = process.env
+
+    beforeEach(() => {
+      process.env = { ...originalEnv }
+    })
+
+    afterEach(() => {
+      process.env = originalEnv
+    })
+
+    it('should throw error if encryption key is not set', () => {
+      delete process.env.ENCRYPTION_KEY
+
+      expect(() => {
+        apiKeyService['validateEncryptionKey']()
+      }).toThrow('ENCRYPTION_KEY environment variable is not set')
+    })
+
+    it('should throw error if encryption key length is invalid', () => {
+      process.env.ENCRYPTION_KEY = 'short'
+
+      expect(() => {
+        apiKeyService['validateEncryptionKey']()
+      }).toThrow('ENCRYPTION_KEY must be a 64-character hex string')
+    })
+
+    it('should throw error if encryption key is not valid hex', () => {
+      process.env.ENCRYPTION_KEY = 'x'.repeat(64)
+
+      expect(() => {
+        apiKeyService['validateEncryptionKey']()
+      }).toThrow('ENCRYPTION_KEY must be a valid hex string')
+    })
+
+    it('should not throw error for valid encryption key', () => {
+      process.env.ENCRYPTION_KEY = '0'.repeat(64)
+
+      expect(() => {
+        apiKeyService['validateEncryptionKey']()
+      }).not.toThrow()
+    })
+  })
+
+  describe('API Key Encryption/Decryption', () => {
+    const originalEnv = process.env
+
+    beforeEach(() => {
+      process.env.ENCRYPTION_KEY = '0'.repeat(64)
+    })
+
+    afterEach(() => {
+      process.env = originalEnv
+    })
+
+    it('should encrypt and decrypt API key correctly', () => {
+      const originalKey = 'test-api-key'
+      const encrypted = apiKeyService['encryptApiKey'](originalKey)
+      const decrypted = apiKeyService['decryptApiKey'](encrypted)
+
+      expect(decrypted).toBe(originalKey)
+      expect(encrypted).toMatch(/^[a-f0-9]{32}:[a-f0-9]+$/)
+    })
+
+    it('should throw error for invalid encrypted key format', () => {
+      expect(() => {
+        apiKeyService['decryptApiKey']('invalid-format')
+      }).toThrow('Invalid encrypted key format')
+    })
+
+    it('should handle empty key encryption', () => {
+      const encrypted = apiKeyService['encryptApiKey']('')
+      const decrypted = apiKeyService['decryptApiKey'](encrypted)
+
+      expect(decrypted).toBe('')
+    })
+
+    it('should handle special characters in key', () => {
+      const originalKey = '!@#$%^&*()_+'
+      const encrypted = apiKeyService['encryptApiKey'](originalKey)
+      const decrypted = apiKeyService['decryptApiKey'](encrypted)
+
+      expect(decrypted).toBe(originalKey)
     })
   })
 }) 

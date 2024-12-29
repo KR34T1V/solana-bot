@@ -133,9 +133,7 @@ export class ApiKeyService {
             throw new Error('ENCRYPTION_KEY must be a 64-character hex string');
         }
         
-        try {
-            Buffer.from(encryptionKey, 'hex');
-        } catch (e) {
+        if (!/^[0-9a-fA-F]+$/.test(encryptionKey)) {
             throw new Error('ENCRYPTION_KEY must be a valid hex string');
         }
     }

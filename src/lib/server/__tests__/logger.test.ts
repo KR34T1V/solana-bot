@@ -107,8 +107,9 @@ describe('Logger Service', () => {
 
   describe('logger configuration', () => {
     it('should have correct log format', () => {
-      const testTransport = new winston.transports.Console()
+      const testTransport = new winston.transports.Console({ level: 'info' })
       const testLogger = winston.createLogger({
+        level: 'info',
         transports: [testTransport]
       })
 

@@ -1,153 +1,123 @@
-import { json } from '@sveltejs/kit';
+import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { prisma } from '$lib/server/prisma';
-import { calculateVersionPerformance } from '$lib/server/performance';
-import type { PrismaClient } from '@prisma/client';
+import { logger } from '$lib/server/logger';
+import type { Strategy, StrategyVersion } from '@prisma/client';
 
-type Strategy = NonNullable<Awaited<ReturnType<PrismaClient['strategy']['findUnique']>>>;
-type StrategyVersion = NonNullable<Awaited<ReturnType<PrismaClient['strategyVersion']['findUnique']>>>;
-type Backtest = NonNullable<Awaited<ReturnType<PrismaClient['backtest']['findUnique']>>>;
-
-interface PerformanceMetrics {
-  timeframes: {
-    [key: string]: {
-      winRate: number;
-      profitFactor: number;
-      sharpeRatio: number;
-      maxDrawdown: number;
-      totalTrades: number;
-      profitableTrades: number;
-      averageProfit: number;
-      averageLoss: number;
-    };
-  };
-  overall: {
-    totalBacktests: number;
-    bestTimeframe: string;
-    worstTimeframe: string;
-    averageWinRate: number;
-    averageSharpeRatio: number;
-  };
-}
-
-interface VersionPerformance {
-  version: number;
-  performance: PerformanceMetrics;
-}
-
-interface BacktestResult {
-  id: string;
-  createdAt: Date;
-  status: string;
-  results: {
-    totalTrades: number;
-    profitableTrades: number;
-    trades: Array<{
-      timestamp: string;
-      type: string;
-      price: number;
-      amount: number;
-      profit: number;
-    }>;
-  };
-}
-
-interface StrategyWithVersions extends Strategy {
-  versions: Array<StrategyVersionWithStrategy>;
-}
-
-interface StrategyVersionWithStrategy extends StrategyVersion {
-  strategy: Strategy & {
-    backtests: Backtest[];
-  };
-}
+type StrategyVersionWithStrategy = StrategyVersion & {
+  strategy: Strategy;
+};
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-  if (!locals.userId) {
-    return new Response('Unauthorized', { status: 401 });
+  const userId = locals.userId;
+
+  if (!userId) {
+    logger.warn('Unauthorized access attempt to strategy performance', {
+      strategyId: params.id
+    });
+    throw error(401, 'Unauthorized');
   }
 
-  const strategy = await prisma.strategy.findUnique({
-    where: { id: params.id },
-    include: {
-      versions: {
-        orderBy: { version: 'desc' },
-        include: {
-          strategy: {
-            include: {
-              backtests: true
-            }
+  // Get strategy with versions
+  let strategy;
+  try {
+    strategy = await prisma.strategy.findUnique({
+      where: { id: params.id },
+      include: {
+        versions: {
+          include: {
+            strategy: true
           }
         }
       }
-    }
-  }) as StrategyWithVersions | null;
-
-  if (!strategy) {
-    return new Response('Strategy not found', { status: 404 });
+    });
+  } catch (err) {
+    logger.error('Error fetching strategy', {
+      error: err,
+      strategyId: params.id,
+      userId
+    });
+    throw error(500, 'An error occurred while fetching strategy performance');
   }
 
-  if (strategy.userId !== locals.userId) {
-    return new Response('Not authorized', { status: 403 });
+  if (!strategy) {
+    logger.warn('Strategy not found', {
+      strategyId: params.id,
+      userId
+    });
+    throw error(404, 'Strategy not found');
+  }
+
+  if (strategy.userId !== userId) {
+    logger.warn('Unauthorized access attempt to strategy', {
+      strategyId: params.id,
+      userId
+    });
+    throw error(403, 'Not authorized');
   }
 
   // Get all backtests for this strategy
-  const backtests = await prisma.backtest.findMany({
-    where: {
+  let backtests;
+  try {
+    backtests = await prisma.backtest.findMany({
+      where: {
+        strategyId: params.id,
+        status: 'COMPLETED'
+      }
+    });
+  } catch (err) {
+    logger.error('Error fetching backtests', {
+      error: err,
       strategyId: params.id,
-      status: 'COMPLETED'
-    }
+      userId
+    });
+    throw error(500, 'An error occurred while fetching strategy performance');
+  }
+
+  // Calculate performance metrics
+  const totalBacktests = backtests.length;
+  const completedBacktests = backtests.filter(b => b.status === 'COMPLETED').length;
+
+  // Calculate average metrics
+  const averageMetrics = backtests.reduce((acc, backtest) => {
+    const results = JSON.parse(backtest.results);
+    return {
+      totalTrades: acc.totalTrades + results.totalTrades,
+      winRate: acc.winRate + (results.winningTrades / results.totalTrades),
+      profitFactor: acc.profitFactor + results.profitFactor,
+      netProfit: acc.netProfit + results.netProfit,
+      maxDrawdown: acc.maxDrawdown + results.maxDrawdown,
+      sharpeRatio: acc.sharpeRatio + results.sharpeRatio
+    };
+  }, {
+    totalTrades: 0,
+    winRate: 0,
+    profitFactor: 0,
+    netProfit: 0,
+    maxDrawdown: 0,
+    sharpeRatio: 0
   });
 
-  // Calculate performance for each version
-  const versionsWithPerformance: VersionPerformance[] = await Promise.all(
-    strategy.versions.map(async (version: StrategyVersionWithStrategy) => {
-      // Get backtests for this version
-      const versionBacktests = backtests.filter(
-        (backtest: Backtest) => 
-          backtest.createdAt >= version.createdAt && 
-          (!strategy.versions.find((v: StrategyVersionWithStrategy) => v.version === version.version + 1) || 
-           backtest.createdAt < strategy.versions.find((v: StrategyVersionWithStrategy) => v.version === version.version + 1)!.createdAt)
-      );
+  // Average out the metrics
+  if (completedBacktests > 0) {
+    averageMetrics.totalTrades = Math.round(averageMetrics.totalTrades / completedBacktests);
+    averageMetrics.winRate = averageMetrics.winRate / completedBacktests;
+    averageMetrics.profitFactor = averageMetrics.profitFactor / completedBacktests;
+    averageMetrics.netProfit = averageMetrics.netProfit / completedBacktests;
+    averageMetrics.maxDrawdown = averageMetrics.maxDrawdown / completedBacktests;
+    averageMetrics.sharpeRatio = averageMetrics.sharpeRatio / completedBacktests;
+  }
 
-      // Calculate performance metrics
-      const performance = await calculateVersionPerformance(versionBacktests);
-
-      // Update version with performance metrics
-      await prisma.strategyVersion.update({
-        where: {
-          strategyId_version: {
-            strategyId: params.id,
-            version: version.version
-          }
-        },
-        data: {
-          performance: performance,
-          lastTestedAt: new Date()
-        }
-      });
-
-      return {
-        version: version.version,
-        performance
-      };
-    })
-  );
-
-  const backtestResults: BacktestResult[] = backtests.map((b: Backtest) => ({
-    id: b.id,
-    createdAt: b.createdAt,
-    status: b.status,
-    results: JSON.parse(b.results)
-  }));
+  // Get all trades from backtests
+  const trades = backtests.flatMap(backtest => {
+    const results = JSON.parse(backtest.results);
+    return results.trades || [];
+  });
 
   return json({
-    strategy: {
-      id: strategy.id,
-      name: strategy.name,
-      currentVersion: strategy.currentVersion
-    },
-    versions: versionsWithPerformance,
-    backtests: backtestResults
+    totalBacktests,
+    completedBacktests,
+    averageMetrics,
+    trades
   });
 }; 
