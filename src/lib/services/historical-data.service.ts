@@ -1,8 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import type { TimeFrame } from '$lib/types';
 
-const prisma = new PrismaClient();
-
 type HistoricalPriceInput = {
     pair: string;
     timestamp: Date;
@@ -16,11 +14,17 @@ type HistoricalPriceInput = {
 };
 
 export class HistoricalDataService {
+    private prisma: PrismaClient;
+
+    constructor(prisma: PrismaClient) {
+        this.prisma = prisma;
+    }
+
     /**
      * Upserts historical price data
      */
     async upsertPrice(data: HistoricalPriceInput) {
-        return prisma.historicalPrice.upsert({
+        return this.prisma.historicalPrice.upsert({
             where: {
                 pair_timestamp_timeframe: {
                     pair: data.pair,
@@ -37,9 +41,9 @@ export class HistoricalDataService {
      * Batch upsert historical price data
      */
     async batchUpsertPrices(data: HistoricalPriceInput[]) {
-        return prisma.$transaction(
+        return this.prisma.$transaction(
             data.map((price) =>
-                prisma.historicalPrice.upsert({
+                this.prisma.historicalPrice.upsert({
                     where: {
                         pair_timestamp_timeframe: {
                             pair: price.pair,
@@ -63,7 +67,7 @@ export class HistoricalDataService {
         startTime: Date;
         endTime: Date;
     }) {
-        return prisma.historicalPrice.findMany({
+        return this.prisma.historicalPrice.findMany({
             where: {
                 pair: params.pair,
                 timeframe: params.timeframe,
@@ -82,7 +86,7 @@ export class HistoricalDataService {
      * Get the latest price for a trading pair
      */
     async getLatestPrice(pair: string, timeframe: TimeFrame) {
-        return prisma.historicalPrice.findFirst({
+        return this.prisma.historicalPrice.findFirst({
             where: {
                 pair,
                 timeframe
@@ -97,7 +101,7 @@ export class HistoricalDataService {
      * Delete historical prices older than the specified date
      */
     async cleanupOldData(olderThan: Date) {
-        return prisma.historicalPrice.deleteMany({
+        return this.prisma.historicalPrice.deleteMany({
             where: {
                 timestamp: {
                     lt: olderThan

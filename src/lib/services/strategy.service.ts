@@ -3,6 +3,7 @@ import type { TimeFrame } from '$lib/types';
 import { BirdeyeService } from './birdeye.service';
 import { WalletService } from './wallet.service';
 import { TradingBotService } from './trading-bot.service';
+import { ApiKeyService } from './api-key.service';
 
 interface StrategyContext {
     pair: string;
@@ -32,11 +33,13 @@ export class StrategyService {
     private birdeyeService: BirdeyeService;
     private walletService: WalletService;
     private tradingBotService: TradingBotService;
+    private apiKeyService: ApiKeyService;
 
-    constructor() {
+    constructor(prisma: PrismaClient) {
         this.birdeyeService = new BirdeyeService();
         this.walletService = new WalletService();
         this.tradingBotService = new TradingBotService();
+        this.apiKeyService = new ApiKeyService(prisma);
     }
 
     /**
@@ -73,15 +76,25 @@ export class StrategyService {
             throw new Error('Wallet not found');
         }
 
-        const currentPrice = await this.birdeyeService.getTokenPrice(config.pair);
-        const ohlcvData = await this.birdeyeService.fetchAndStoreOHLCV({
-            address: config.pair,
-            timeframe: config.timeframe,
-            limit: config.lookbackPeriods || 100
-        });
+        const activeKey = await this.apiKeyService.getActiveKey(wallet.userId, 'birdeye');
+        if (!activeKey) {
+            throw new Error('No active Birdeye API key found');
+        }
+
+        const decryptedKey = await this.apiKeyService.getDecryptedKey(wallet.userId, 'birdeye');
+        if (!decryptedKey) {
+            throw new Error('Failed to decrypt Birdeye API key');
+        }
+
+        const currentPrice = await this.birdeyeService.getTokenPrice(config.pair, decryptedKey);
+        const ohlcvResponse = await this.birdeyeService.getOHLCVData(
+            config.pair,
+            config.timeframe,
+            decryptedKey
+        );
 
         // Transform OHLCV data to match context format
-        const historicalPrices = ohlcvData.map(item => ({
+        const historicalPrices = ohlcvResponse.data.items.map(item => ({
             timestamp: new Date(item.unixTime * 1000),
             open: item.open,
             high: item.high,
@@ -90,12 +103,22 @@ export class StrategyService {
             volume: item.volume
         }));
 
+        // Transform positions to match context format
+        const positions = (wallet.positions || []).map(p => ({
+            id: p.id,
+            side: p.side as 'LONG' | 'SHORT',
+            size: p.size,
+            entryPrice: p.entryPrice,
+            currentPrice: p.currentPrice,
+            pnl: p.pnl
+        }));
+
         return {
             pair: config.pair,
             timeframe: config.timeframe,
-            currentPrice,
+            currentPrice: currentPrice.data.value,
             historicalPrices,
-            positions: wallet.positions || [],
+            positions,
             balance: wallet.balance,
             walletId: wallet.id
         };

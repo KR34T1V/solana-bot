@@ -1,14 +1,18 @@
 import { PrismaClient } from '@prisma/client';
 import type { PositionSide, PositionStatus, TransactionType } from '$lib/types';
 
-const prisma = new PrismaClient();
-
 export class WalletService {
+    private prisma: PrismaClient;
+
+    constructor(prisma: PrismaClient) {
+        this.prisma = prisma;
+    }
+
     /**
      * Get wallet by bot ID
      */
     async getWalletByBotId(botId: string) {
-        return prisma.virtualWallet.findUnique({
+        return this.prisma.virtualWallet.findUnique({
             where: { botId },
             include: {
                 positions: {
@@ -34,7 +38,7 @@ export class WalletService {
         amount: number;
         currency: string;
     }) {
-        return prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx) => {
             const wallet = await tx.virtualWallet.update({
                 where: { id: params.walletId },
                 data: {
@@ -65,7 +69,7 @@ export class WalletService {
         amount: number;
         currency: string;
     }) {
-        return prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx) => {
             const wallet = await tx.virtualWallet.findUnique({
                 where: { id: params.walletId }
             });
@@ -106,7 +110,7 @@ export class WalletService {
         size: number;
         entryPrice: number;
     }) {
-        return prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx) => {
             const wallet = await tx.virtualWallet.findUnique({
                 where: { id: params.walletId }
             });
@@ -149,7 +153,7 @@ export class WalletService {
         positionId: string;
         exitPrice: number;
     }) {
-        return prisma.$transaction(async (tx) => {
+        return this.prisma.$transaction(async (tx) => {
             const position = await tx.position.findUnique({
                 where: { id: params.positionId },
                 include: { wallet: true }
@@ -188,7 +192,7 @@ export class WalletService {
      * Update position's current price and PnL
      */
     async updatePositionPrice(positionId: string, currentPrice: number) {
-        const position = await prisma.position.findUnique({
+        const position = await this.prisma.position.findUnique({
             where: { id: positionId }
         });
 
@@ -200,7 +204,7 @@ export class WalletService {
             ? (currentPrice - position.entryPrice) * position.size
             : (position.entryPrice - currentPrice) * position.size;
 
-        return prisma.position.update({
+        return this.prisma.position.update({
             where: { id: positionId },
             data: {
                 currentPrice,

@@ -1,9 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import type { BotStatus } from '$lib/types';
 
-const prisma = new PrismaClient();
-
 export class TradingBotService {
+    private prisma: PrismaClient;
+
+    constructor(prisma: PrismaClient) {
+        this.prisma = prisma;
+    }
+
     /**
      * Create a new trading bot
      */
@@ -13,7 +17,7 @@ export class TradingBotService {
         strategyId: string;
         config: Record<string, any>;
     }) {
-        return prisma.tradingBot.create({
+        return this.prisma.tradingBot.create({
             data: {
                 name: data.name,
                 status: 'STOPPED' as BotStatus,
@@ -38,7 +42,7 @@ export class TradingBotService {
      * Update bot status
      */
     async updateBotStatus(botId: string, status: BotStatus) {
-        return prisma.tradingBot.update({
+        return this.prisma.tradingBot.update({
             where: { id: botId },
             data: { status }
         });
@@ -48,7 +52,7 @@ export class TradingBotService {
      * Get bot by ID with related data
      */
     async getBotById(botId: string) {
-        return prisma.tradingBot.findUnique({
+        return this.prisma.tradingBot.findUnique({
             where: { id: botId },
             include: {
                 wallet: {
@@ -74,7 +78,7 @@ export class TradingBotService {
      * Get all bots for a user
      */
     async getUserBots(userId: string) {
-        return prisma.tradingBot.findMany({
+        return this.prisma.tradingBot.findMany({
             where: { userId },
             include: {
                 wallet: true,
@@ -87,7 +91,7 @@ export class TradingBotService {
      * Delete a bot and all related data
      */
     async deleteBot(botId: string) {
-        return prisma.tradingBot.delete({
+        return this.prisma.tradingBot.delete({
             where: { id: botId }
         });
     }
@@ -96,7 +100,7 @@ export class TradingBotService {
      * Update bot configuration
      */
     async updateBotConfig(botId: string, config: Record<string, any>) {
-        return prisma.tradingBot.update({
+        return this.prisma.tradingBot.update({
             where: { id: botId },
             data: {
                 config: JSON.stringify(config)
