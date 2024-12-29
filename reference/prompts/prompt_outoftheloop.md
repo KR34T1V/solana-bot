@@ -1,6 +1,6 @@
 # Out of the loop
 ## Understand the codebase
-work through my codebase, understand the structure, the entrypoint, config & reference brief & todo list.
+work through my codebase, understand the structure, the entrypoint, config & reference brief & todo list. Do not write any code, just understand the codebase.
 
 ### Specifics
 - Understand the architecture

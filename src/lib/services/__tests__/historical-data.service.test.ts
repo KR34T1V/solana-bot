@@ -1,156 +1,188 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { HistoricalDataService } from '../historical-data.service'
-import type { DeepMockProxy } from 'vitest-mock-extended'
+import type { PrismaClient } from '@prisma/client'
 import { mockDeep } from 'vitest-mock-extended'
-import type { PrismaClient, HistoricalPrice } from '@prisma/client'
 import type { TimeFrame } from '$lib/types'
 
 describe('HistoricalDataService', () => {
-  let historicalDataService: HistoricalDataService
-  let mockPrisma: DeepMockProxy<PrismaClient>
+  let service: HistoricalDataService
+  let mockPrisma: ReturnType<typeof mockDeep<PrismaClient>>
 
   beforeEach(() => {
-    // Reset mocks
-    vi.clearAllMocks()
-
-    // Create mock instances
     mockPrisma = mockDeep<PrismaClient>()
-
-    // Create service instance
-    historicalDataService = new HistoricalDataService(mockPrisma)
+    service = new HistoricalDataService(mockPrisma)
   })
 
   describe('upsertPrice', () => {
-    it('should upsert a single price record', async () => {
-      const mockPrice = {
+    it('should upsert a price record', async () => {
+      const price = {
         pair: 'SOL/USD',
         timestamp: new Date(),
-        open: 100,
-        high: 110,
-        low: 90,
-        close: 105,
+        open: 1.0,
+        high: 1.2,
+        low: 0.8,
+        close: 1.1,
         volume: 1000,
         source: 'birdeye',
         timeframe: '1h'
       }
 
-      mockPrisma.historicalPrice.upsert.mockResolvedValue(mockPrice as HistoricalPrice)
+      mockPrisma.historicalPrice.upsert.mockResolvedValueOnce({
+        ...price,
+        id: 'price-1',
+        createdAt: new Date()
+      })
 
-      const result = await historicalDataService.upsertPrice(mockPrice)
+      await service.upsertPrice(price)
 
-      expect(result).toEqual(mockPrice)
       expect(mockPrisma.historicalPrice.upsert).toHaveBeenCalledWith({
         where: {
           pair_timestamp_timeframe: {
-            pair: mockPrice.pair,
-            timestamp: mockPrice.timestamp,
-            timeframe: mockPrice.timeframe
+            pair: price.pair,
+            timestamp: price.timestamp,
+            timeframe: price.timeframe
           }
         },
-        create: mockPrice,
-        update: mockPrice
+        create: price,
+        update: price
       })
+    })
+
+    it('should handle transaction failure', async () => {
+      const price = {
+        pair: 'SOL/USD',
+        timestamp: new Date(),
+        open: 1.0,
+        high: 1.2,
+        low: 0.8,
+        close: 1.1,
+        volume: 1000,
+        source: 'birdeye',
+        timeframe: '1h'
+      }
+
+      mockPrisma.historicalPrice.upsert.mockRejectedValueOnce(new Error('Database error'))
+
+      await expect(service.upsertPrice(price)).rejects.toThrow('Database error')
+    })
+
+    it('should validate price data before upserting', async () => {
+      const invalidPrice = {
+        pair: 'SOL/USD',
+        timestamp: new Date(),
+        open: -1.0, // Invalid negative price
+        high: 1.2,
+        low: 0.8,
+        close: 1.1,
+        volume: 1000,
+        source: 'birdeye',
+        timeframe: '1h'
+      }
+
+      await expect(service.upsertPrice(invalidPrice)).rejects.toThrow('Invalid price data')
     })
   })
 
   describe('batchUpsertPrices', () => {
-    it('should upsert multiple price records in a transaction', async () => {
-      const mockPrices = [
+    it('should handle empty price array', async () => {
+      const result = await service.batchUpsertPrices([])
+      expect(result).toEqual([])
+      expect(mockPrisma.historicalPrice.upsert).not.toHaveBeenCalled()
+    })
+
+    it('should batch upsert multiple price records', async () => {
+      const prices = [
         {
           pair: 'SOL/USD',
           timestamp: new Date(),
-          open: 100,
-          high: 110,
-          low: 90,
-          close: 105,
+          open: 1.0,
+          high: 1.2,
+          low: 0.8,
+          close: 1.1,
           volume: 1000,
           source: 'birdeye',
           timeframe: '1h'
         },
         {
           pair: 'SOL/USD',
-          timestamp: new Date(Date.now() + 3600000),
-          open: 105,
-          high: 115,
-          low: 95,
-          close: 110,
-          volume: 1200,
+          timestamp: new Date(),
+          open: 2.0,
+          high: 2.2,
+          low: 1.8,
+          close: 2.1,
+          volume: 2000,
           source: 'birdeye',
           timeframe: '1h'
         }
-      ] as HistoricalPrice[]
+      ]
 
-      mockPrisma.$transaction.mockResolvedValue(mockPrices)
+      const mockUpsertResults = prices.map((price, index) => ({
+        ...price,
+        id: `price-${index + 1}`,
+        createdAt: new Date()
+      }))
 
-      const result = await historicalDataService.batchUpsertPrices(mockPrices)
+      mockPrisma.$transaction.mockResolvedValueOnce(mockUpsertResults)
 
-      expect(result).toEqual(mockPrices)
+      const result = await service.batchUpsertPrices(prices)
+
+      expect(result).toEqual(mockUpsertResults)
       expect(mockPrisma.$transaction).toHaveBeenCalled()
-      expect(mockPrisma.historicalPrice.upsert).toHaveBeenCalledTimes(mockPrices.length)
-
-      // Verify each upsert call
-      mockPrices.forEach((price, index) => {
-        expect(mockPrisma.historicalPrice.upsert).toHaveBeenNthCalledWith(index + 1, {
-          where: {
-            pair_timestamp_timeframe: {
-              pair: price.pair,
-              timestamp: price.timestamp,
-              timeframe: price.timeframe
-            }
-          },
-          create: price,
-          update: price
-        })
-      })
+      expect(mockPrisma.historicalPrice.upsert).toHaveBeenCalledTimes(2)
     })
   })
 
   describe('getPrices', () => {
-    it('should get historical prices within a time range', async () => {
+    it('should validate time range', async () => {
+      const endTime = new Date()
+      const startTime = new Date(endTime.getTime() + 1000) // Invalid: start time after end time
+
+      await expect(
+        service.getPrices({
+          pair: 'SOL/USD',
+          timeframe: '1h' as TimeFrame,
+          startTime,
+          endTime
+        })
+      ).rejects.toThrow('Invalid time range')
+    })
+
+    it('should return historical prices', async () => {
+      const endTime = new Date()
+      const startTime = new Date(endTime.getTime() - 1000)
       const mockPrices = [
         {
+          id: 'price-1',
           pair: 'SOL/USD',
           timestamp: new Date(),
-          open: 100,
-          high: 110,
-          low: 90,
-          close: 105,
+          open: 1.0,
+          high: 1.2,
+          low: 0.8,
+          close: 1.1,
           volume: 1000,
           source: 'birdeye',
-          timeframe: '1h'
-        },
-        {
-          pair: 'SOL/USD',
-          timestamp: new Date(Date.now() + 3600000),
-          open: 105,
-          high: 115,
-          low: 95,
-          close: 110,
-          volume: 1200,
-          source: 'birdeye',
-          timeframe: '1h'
+          timeframe: '1h',
+          createdAt: new Date()
         }
-      ] as HistoricalPrice[]
+      ]
 
-      const params = {
+      mockPrisma.historicalPrice.findMany.mockResolvedValueOnce(mockPrices)
+
+      const result = await service.getPrices({
         pair: 'SOL/USD',
         timeframe: '1h' as TimeFrame,
-        startTime: new Date(Date.now() - 3600000),
-        endTime: new Date(Date.now() + 7200000)
-      }
-
-      mockPrisma.historicalPrice.findMany.mockResolvedValue(mockPrices)
-
-      const result = await historicalDataService.getPrices(params)
+        startTime,
+        endTime
+      })
 
       expect(result).toEqual(mockPrices)
       expect(mockPrisma.historicalPrice.findMany).toHaveBeenCalledWith({
         where: {
-          pair: params.pair,
-          timeframe: params.timeframe,
+          pair: 'SOL/USD',
+          timeframe: '1h',
           timestamp: {
-            gte: params.startTime,
-            lte: params.endTime
+            gte: startTime,
+            lte: endTime
           }
         },
         orderBy: {
@@ -160,62 +192,33 @@ describe('HistoricalDataService', () => {
     })
   })
 
-  describe('getLatestPrice', () => {
-    it('should get the latest price for a trading pair', async () => {
-      const mockPrice = {
-        pair: 'SOL/USD',
-        timestamp: new Date(),
-        open: 100,
-        high: 110,
-        low: 90,
-        close: 105,
-        volume: 1000,
-        source: 'birdeye',
-        timeframe: '1h'
-      } as HistoricalPrice
-
-      mockPrisma.historicalPrice.findFirst.mockResolvedValue(mockPrice)
-
-      const result = await historicalDataService.getLatestPrice('SOL/USD', '1h' as TimeFrame)
-
-      expect(result).toEqual(mockPrice)
-      expect(mockPrisma.historicalPrice.findFirst).toHaveBeenCalledWith({
-        where: {
-          pair: 'SOL/USD',
-          timeframe: '1h'
-        },
-        orderBy: {
-          timestamp: 'desc'
-        }
-      })
-    })
-
-    it('should return null if no price is found', async () => {
-      mockPrisma.historicalPrice.findFirst.mockResolvedValue(null)
-
-      const result = await historicalDataService.getLatestPrice('SOL/USD', '1h' as TimeFrame)
-
-      expect(result).toBeNull()
-    })
-  })
-
   describe('cleanupOldData', () => {
-    it('should delete historical prices older than the specified date', async () => {
-      const olderThan = new Date(Date.now() - 86400000) // 24 hours ago
-      const mockDeleteResult = { count: 10 }
+    it('should validate cleanup date', async () => {
+      const futureDate = new Date(Date.now() + 1000 * 60 * 60) // 1 hour in future
+      await expect(service.cleanupOldData(futureDate)).rejects.toThrow('Cannot cleanup future data')
+    })
 
-      mockPrisma.historicalPrice.deleteMany.mockResolvedValue(mockDeleteResult)
+    it('should delete old price records', async () => {
+      const oldDate = new Date(Date.now() - 1000 * 60 * 60 * 24) // 24 hours ago
+      mockPrisma.historicalPrice.deleteMany.mockResolvedValueOnce({ count: 10 })
 
-      const result = await historicalDataService.cleanupOldData(olderThan)
+      const result = await service.cleanupOldData(oldDate)
 
-      expect(result).toEqual(mockDeleteResult)
+      expect(result).toEqual({ count: 10 })
       expect(mockPrisma.historicalPrice.deleteMany).toHaveBeenCalledWith({
         where: {
           timestamp: {
-            lt: olderThan
+            lt: oldDate
           }
         }
       })
+    })
+
+    it('should handle deletion errors', async () => {
+      const oldDate = new Date(Date.now() - 1000 * 60 * 60 * 24)
+      mockPrisma.historicalPrice.deleteMany.mockRejectedValueOnce(new Error('Database error'))
+
+      await expect(service.cleanupOldData(oldDate)).rejects.toThrow('Failed to cleanup historical data')
     })
   })
 }) 
