@@ -1,38 +1,93 @@
-# sv
+# Solana Trading Bot
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A scalable trading bot platform built with Svelte 5 and SvelteKit, featuring strategy management, backtesting, and real-time trading capabilities.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- Strategy management and backtesting
+- Real-time market data integration via Birdeye API
+- Virtual wallet simulation
+- Performance analytics
+- TypeScript-first codebase
+- Test-driven development
 
-```bash
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Development
 
 ```bash
-npm run dev
+# Install dependencies
+yarn install
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+# Start development server
+yarn dev
+
+# Build for production
+yarn build
+
+# Preview production build
+yarn preview
 ```
 
-## Building
+## Testing
 
-To create a production version of your app:
+The project uses Vitest for unit testing and coverage reporting.
 
 ```bash
-npm run build
+# Run tests
+yarn test
+
+# Run tests with UI
+yarn test:ui
+
+# Generate coverage report
+yarn test:coverage
+
+# Run end-to-end tests
+yarn test:e2e
 ```
 
-You can preview the production build with `npm run preview`.
+### Coverage Thresholds
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+We maintain strict coverage requirements:
+- Statements: 80%
+- Branches: 80%
+- Functions: 80%
+- Lines: 80%
+
+Coverage reports are generated in HTML format and can be viewed by opening `coverage/index.html` in a browser.
+
+## Project Structure
+
+```
+src/
+├── lib/
+│   ├── components/     # Reusable UI components
+│   ├── server/         # Server-side utilities
+│   ├── services/       # Core business logic
+│   ├── stores/         # State management
+│   ├── test/          # Test utilities and setup
+│   ├── types/         # TypeScript definitions
+│   └── utils/         # Helper functions
+├── routes/            # SvelteKit routes
+└── app.d.ts          # TypeScript declarations
+```
+
+## Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+DATABASE_URL="your-database-url"
+BIRDEYE_API_KEY="your-birdeye-api-key"
+```
+
+## Contributing
+
+1. Write tests for new features
+2. Ensure all tests pass
+3. Meet coverage thresholds
+4. Follow TypeScript strict mode
+5. Use Prettier for code formatting
+
+## License
+
+[MIT](LICENSE)
