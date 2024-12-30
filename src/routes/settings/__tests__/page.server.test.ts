@@ -174,7 +174,7 @@ describe('actions', () => {
     } as unknown as BirdeyeService;
     apiKeyService = {
       upsertApiKey: vi.fn(),
-      deleteApiKey: vi.fn()
+      deleteApiKey: vi.fn().mockResolvedValue(undefined)
     } as unknown as ApiKeyService;
 
     // Set the mocked services

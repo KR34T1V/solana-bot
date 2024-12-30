@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/lib/test/setup.ts'],
+    silent: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -28,4 +29,4 @@ export default defineConfig({
       }
     }
   }
-}) 
+}); 

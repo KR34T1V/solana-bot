@@ -234,11 +234,11 @@ export const actions = {
       await prisma.strategy.delete({
         where: { id: params.id }
       });
-
-      throw redirect(302, '/strategy');
     } catch (error) {
       console.error('Strategy deletion error:', error);
       return { success: false, error: 'Failed to delete strategy' };
     }
+
+    throw redirect(302, '/strategy');
   }
 } satisfies Actions; 

@@ -6,7 +6,7 @@ import { ApiKeyService } from '$lib/services/api-key.service';
 
 // Initialize services
 let birdeyeService = new BirdeyeService();
-let apiKeyService = new ApiKeyService();
+let apiKeyService = new ApiKeyService(prisma);
 
 // Allow overriding services for testing
 export const setServices = (birdeye: BirdeyeService, apiKey: ApiKeyService) => {

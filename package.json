@@ -13,7 +13,7 @@
 		"format": "prettier --write .",
 		"test": "vitest",
 		"test:ui": "vitest --ui",
-		"test:coverage": "vitest run --coverage",
+		"test:coverage": "mkdir -p coverage && vitest run --coverage",
 		"test:e2e": "playwright test"
 	},
 	"dependencies": {

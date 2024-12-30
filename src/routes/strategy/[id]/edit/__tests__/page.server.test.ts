@@ -12,11 +12,13 @@ vi.mock('$lib/server/prisma', () => {
     prisma: {
       strategy: {
         findUnique: vi.fn(),
-        update: vi.fn()
+        update: vi.fn(),
+        delete: vi.fn()
       },
       strategyVersion: {
         create: vi.fn(),
-        findMany: vi.fn()
+        findMany: vi.fn(),
+        findUnique: vi.fn()
       },
       $transaction: vi.fn()
     }
@@ -98,6 +100,10 @@ const createMockRequestEvent = (userId: string | null, strategyId: string, formD
   isDataRequest: false,
   isSubRequest: false
 })
+
+type StrategyVersionWithRelations = StrategyVersion & {
+  strategy: Strategy;
+};
 
 describe('Strategy Edit Page Server', () => {
   beforeEach(() => {
@@ -339,6 +345,321 @@ describe('Strategy Edit Page Server', () => {
 
         expect(prisma.$transaction).not.toHaveBeenCalled()
       })
+
+      it('should handle invalid configuration', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategy);
+
+        const formData = {
+          name: 'Updated Strategy',
+          type: 'MEAN_REVERSION',
+          config: '{"timeframe":"invalid"}',
+          changes: 'Updated configuration'
+        };
+
+        const result = await actions.update(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: expect.stringContaining('timeframe: Invalid timeframe')
+        });
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('should handle database error', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategy);
+        vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('Database error'));
+
+        const formData = {
+          name: 'Updated Strategy',
+          type: 'MEAN_REVERSION',
+          config: '{"timeframe":"1h","deviationThreshold":2}',
+          changes: 'Updated configuration'
+        };
+
+        const result = await actions.update(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Failed to update strategy'
+        });
+      });
+
+      it('should handle unauthorized access', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce({
+          ...mockStrategy,
+          userId: 'other-user'
+        });
+
+        const formData = {
+          name: 'Updated Strategy',
+          type: 'MEAN_REVERSION',
+          config: '{"timeframe":"1h","deviationThreshold":2}',
+          changes: 'Updated configuration'
+        };
+
+        const result = await actions.update(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Not authorized to edit this strategy'
+        });
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('should handle unauthenticated access', async () => {
+        const formData = {
+          name: 'Updated Strategy',
+          type: 'MEAN_REVERSION',
+          config: '{"timeframe":"1h","deviationThreshold":2}',
+          changes: 'Updated configuration'
+        };
+
+        await expect(actions.update(createMockRequestEvent(null, 'strategy-1', formData)))
+          .rejects.toEqual(expect.objectContaining({
+            status: 302,
+            location: '/auth/login'
+          }));
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
     })
+
+    describe('revert', () => {
+      it('should revert strategy to previous version', async () => {
+        const updatedStrategy = {
+          ...mockStrategy,
+          name: mockStrategyVersion.name,
+          type: mockStrategyVersion.type,
+          config: mockStrategyVersion.config,
+          currentVersion: 2
+        };
+
+        vi.mocked(prisma.strategyVersion.findUnique).mockResolvedValueOnce({
+          ...mockStrategyVersion,
+          strategy: mockStrategy
+        } as StrategyVersionWithRelations);
+
+        vi.mocked(prisma.$transaction).mockImplementationOnce(async (callback) => {
+          await callback(prisma);
+          return updatedStrategy;
+        });
+
+        const formData = {
+          versionId: 'version-1'
+        };
+
+        const result = await actions.revert(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: true,
+          strategy: updatedStrategy
+        });
+
+        expect(prisma.strategyVersion.create).toHaveBeenCalledWith({
+          data: {
+            version: 2,
+            name: mockStrategyVersion.name,
+            type: mockStrategyVersion.type,
+            config: mockStrategyVersion.config,
+            changes: 'Reverted to version 1',
+            strategyId: mockStrategy.id
+          }
+        });
+
+        expect(prisma.strategy.update).toHaveBeenCalledWith({
+          where: { id: mockStrategy.id },
+          data: {
+            name: mockStrategyVersion.name,
+            type: mockStrategyVersion.type,
+            config: mockStrategyVersion.config,
+            currentVersion: 2
+          }
+        });
+      });
+
+      it('should handle missing version ID', async () => {
+        const formData = {};
+
+        const result = await actions.revert(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Version ID is required'
+        });
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('should handle version not found', async () => {
+        vi.mocked(prisma.strategyVersion.findUnique).mockResolvedValueOnce(null);
+
+        const formData = {
+          versionId: 'non-existent'
+        };
+
+        const result = await actions.revert(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Version not found'
+        });
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('should handle unauthorized access', async () => {
+        vi.mocked(prisma.strategyVersion.findUnique).mockResolvedValueOnce({
+          ...mockStrategyVersion,
+          strategy: {
+            ...mockStrategy,
+            userId: 'other-user'
+          }
+        } as StrategyVersionWithRelations);
+
+        const formData = {
+          versionId: 'version-1'
+        };
+
+        const result = await actions.revert(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Not authorized to revert this strategy'
+        });
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('should handle invalid configuration in version', async () => {
+        vi.mocked(prisma.strategyVersion.findUnique).mockResolvedValueOnce({
+          ...mockStrategyVersion,
+          config: '{"timeframe":"invalid"}',
+          strategy: mockStrategy
+        } as StrategyVersionWithRelations);
+
+        const formData = {
+          versionId: 'version-1'
+        };
+
+        const result = await actions.revert(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: expect.stringContaining('timeframe: Invalid timeframe')
+        });
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('should handle database error', async () => {
+        vi.mocked(prisma.strategyVersion.findUnique).mockResolvedValueOnce({
+          ...mockStrategyVersion,
+          strategy: mockStrategy
+        } as StrategyVersionWithRelations);
+
+        vi.mocked(prisma.$transaction).mockRejectedValueOnce(new Error('Database error'));
+
+        const formData = {
+          versionId: 'version-1'
+        };
+
+        const result = await actions.revert(createMockRequestEvent('user-1', 'strategy-1', formData));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Failed to revert strategy'
+        });
+      });
+
+      it('should handle unauthenticated access', async () => {
+        const formData = {
+          versionId: 'version-1'
+        };
+
+        await expect(actions.revert(createMockRequestEvent(null, 'strategy-1', formData)))
+          .rejects.toEqual(expect.objectContaining({
+            status: 302,
+            location: '/auth/login'
+          }));
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('delete', () => {
+      it('should delete strategy', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategy);
+        vi.mocked(prisma.strategy.delete).mockResolvedValueOnce(mockStrategy);
+
+        let redirectThrown = false;
+        try {
+          await actions.delete(createMockRequestEvent('user-1', 'strategy-1', {}));
+        } catch (error) {
+          redirectThrown = true;
+          expect(error).toEqual(expect.objectContaining({
+            status: 302,
+            location: '/strategy'
+          }));
+        }
+
+        expect(redirectThrown).toBe(true);
+        expect(prisma.strategy.delete).toHaveBeenCalledWith({
+          where: { id: 'strategy-1' }
+        });
+      });
+
+      it('should handle strategy not found', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(null);
+
+        const result = await actions.delete(createMockRequestEvent('user-1', 'strategy-1', {}));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Strategy not found'
+        });
+
+        expect(prisma.strategy.delete).not.toHaveBeenCalled();
+      });
+
+      it('should handle unauthorized access', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce({
+          ...mockStrategy,
+          userId: 'other-user'
+        });
+
+        const result = await actions.delete(createMockRequestEvent('user-1', 'strategy-1', {}));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Not authorized to delete this strategy'
+        });
+
+        expect(prisma.strategy.delete).not.toHaveBeenCalled();
+      });
+
+      it('should handle database error', async () => {
+        vi.mocked(prisma.strategy.findUnique).mockResolvedValueOnce(mockStrategy);
+        vi.mocked(prisma.strategy.delete).mockRejectedValueOnce(new Error('Database error'));
+
+        const result = await actions.delete(createMockRequestEvent('user-1', 'strategy-1', {}));
+
+        expect(result).toEqual({
+          success: false,
+          error: 'Failed to delete strategy'
+        });
+      });
+
+      it('should handle unauthenticated access', async () => {
+        await expect(actions.delete(createMockRequestEvent(null, 'strategy-1', {})))
+          .rejects.toEqual(expect.objectContaining({
+            status: 302,
+            location: '/auth/login'
+          }));
+
+        expect(prisma.strategy.delete).not.toHaveBeenCalled();
+      });
+    });
   })
 }) 

@@ -112,20 +112,32 @@ export const actions = {
     }
 
     // Validate date range based on timeframe
-    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const maxDays = {
-      '1m': 7,    // 1 week max for 1-minute data
-      '5m': 30,   // 1 month max for 5-minute data
-      '15m': 90,  // 3 months max for 15-minute data
-      '1h': 180,  // 6 months max for hourly data
-      '4h': 365,  // 1 year max for 4-hour data
-      '1d': 730   // 2 years max for daily data
+    const maxDaysForTimeframe = {
+      '1m': 7,
+      '5m': 30,
+      '15m': 60,
+      '1h': 90,
+      '4h': 180,
+      '1d': 365
+    } as const;
+
+    type TimeframeKey = keyof typeof maxDaysForTimeframe;
+    const isValidTimeframe = (value: string): value is TimeframeKey => {
+      return value in maxDaysForTimeframe;
     };
 
-    if (daysDiff > maxDays[timeframe]) {
+    const timeframeValue = formData.get('timeframe') as string;
+    if (!timeframeValue || !isValidTimeframe(timeframeValue)) {
+      return { success: false, error: 'Invalid timeframe' };
+    }
+
+    const maxDays = maxDaysForTimeframe[timeframeValue];
+
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff > maxDays) {
       return { 
         success: false, 
-        error: `Maximum date range for ${timeframe} timeframe is ${maxDays[timeframe]} days` 
+        error: `Maximum date range for ${timeframeValue} timeframe is ${maxDays} days` 
       };
     }
 
@@ -186,14 +198,25 @@ export const actions = {
             })).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
           };
 
-          // Update backtest with results
-          const updatedBacktest = await prisma.backtest.update({
-            where: { id: backtest.id },
-            data: {
-              status: 'COMPLETED',
-              results: JSON.stringify(results)
-            }
-          });
+          // Update backtest status and results
+          try {
+            await prisma.backtest.update({
+              where: { id: backtest.id },
+              data: {
+                status: 'COMPLETED',
+                results: JSON.stringify(results)
+              }
+            });
+          } catch (err) {
+            const error = err as Error;
+            await prisma.backtest.update({
+              where: { id: backtest.id },
+              data: {
+                status: 'ERROR',
+                results: JSON.stringify({ error: error.message })
+              }
+            });
+          }
 
           // Calculate performance metrics
           const backtests = await prisma.backtest.findMany({

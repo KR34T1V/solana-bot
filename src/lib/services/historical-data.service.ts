@@ -1,5 +1,6 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import type { TimeFrame } from '$lib/types';
+import { logger } from '$lib/server/logger';
 
 type HistoricalPriceInput = {
     pair: string;
@@ -22,14 +23,17 @@ export class HistoricalDataService {
 
     private validatePriceData(data: HistoricalPriceInput) {
         if (data.open < 0 || data.high < 0 || data.low < 0 || data.close < 0) {
+            logger.error('Invalid price data:', { data });
             throw new Error('Invalid price data');
         }
 
         if (data.high < data.low || data.high < data.open || data.high < data.close) {
+            logger.error('Invalid OHLC data:', { data });
             throw new Error('Invalid OHLC data');
         }
 
         if (data.volume < 0) {
+            logger.error('Invalid volume data:', { data });
             throw new Error('Invalid volume data');
         }
     }
@@ -53,8 +57,10 @@ export class HistoricalDataService {
             });
         } catch (error) {
             if (error instanceof Error) {
+                logger.error('Failed to upsert price:', { error, data });
                 throw error;
             }
+            logger.error('Unknown error upserting price:', { error, data });
             throw new Error('Failed to upsert price data');
         }
     }
@@ -85,6 +91,7 @@ export class HistoricalDataService {
                 )
             );
         } catch (error) {
+            logger.error('Failed to batch upsert prices:', { error, count: data.length });
             throw new Error('Failed to batch upsert prices');
         }
     }
@@ -99,10 +106,12 @@ export class HistoricalDataService {
         endTime: Date;
     }) {
         if (!params.pair || !params.timeframe) {
+            logger.error('Invalid parameters for getPrices:', { params });
             throw new Error('Invalid parameters');
         }
 
         if (params.startTime > params.endTime) {
+            logger.error('Invalid time range for getPrices:', { params });
             throw new Error('Invalid time range');
         }
 
@@ -121,6 +130,7 @@ export class HistoricalDataService {
                 }
             });
         } catch (error) {
+            logger.error('Failed to fetch historical prices:', { error, params });
             throw new Error('Failed to fetch historical prices');
         }
     }
@@ -129,15 +139,20 @@ export class HistoricalDataService {
      * Get the latest price for a trading pair
      */
     async getLatestPrice(pair: string, timeframe: TimeFrame) {
-        return this.prisma.historicalPrice.findFirst({
-            where: {
-                pair,
-                timeframe
-            },
-            orderBy: {
-                timestamp: 'desc'
-            }
-        });
+        try {
+            return await this.prisma.historicalPrice.findFirst({
+                where: {
+                    pair,
+                    timeframe
+                },
+                orderBy: {
+                    timestamp: 'desc'
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to fetch latest price:', { error, pair, timeframe });
+            return null;
+        }
     }
 
     /**
@@ -145,6 +160,7 @@ export class HistoricalDataService {
      */
     async cleanupOldData(olderThan: Date) {
         if (olderThan > new Date()) {
+            logger.error('Cannot cleanup future data:', { olderThan });
             throw new Error('Cannot cleanup future data');
         }
 
@@ -157,6 +173,7 @@ export class HistoricalDataService {
                 }
             });
         } catch (error) {
+            logger.error('Failed to cleanup historical data:', { error, olderThan });
             throw new Error('Failed to cleanup historical data');
         }
     }
