@@ -9,7 +9,7 @@ import type {
 import type { TokenInfo } from '$lib/types/token.types';
 import { logger } from '$lib/server/logger';
 import { fetchWithRetry } from '$lib/utils/fetch';
-import { ProviderError, ProviderErrorType } from './__tests__/factory';
+import { ProviderError, ProviderErrorType } from './factory/errors/provider.error';
 
 export class BaseProvider implements MarketDataProvider {
     public readonly name: string;
