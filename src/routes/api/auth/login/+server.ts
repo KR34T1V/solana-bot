@@ -1,11 +1,10 @@
 import { json } from '@sveltejs/kit';
-import { SignJWT } from 'jose';
 import { prisma } from '$lib/server/prisma';
-import { comparePasswords } from '$lib/server/auth';
+import { verifyPassword, generateToken } from '$lib/server/auth';
 import { logger, logError } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request }) => {
   try {
     const { email, password } = await request.json();
 
@@ -32,7 +31,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     // Verify password
-    const isValid = await comparePasswords(password, user.password);
+    const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
       logger.warn('Login attempt with invalid password', { email, userId: user.id });
       return json(
@@ -41,29 +40,19 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       );
     }
 
-    // Create JWT token
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const token = await new SignJWT({ userId: user.id })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('24h')
-      .sign(secret);
+    // Generate JWT token
+    const token = await generateToken(user.id);
 
     logger.info('User logged in successfully', { email, userId: user.id });
 
-    // Set the token cookie
-    cookies.set('token', token, {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24, // 24 hours
-      secure: process.env.NODE_ENV === 'production'
-    });
+    // Create response with token cookie
+    const response = json({ token });
+    response.headers.set(
+      'Set-Cookie',
+      `token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`
+    );
 
-    return json({ 
-      success: true,
-      userId: user.id
-    });
+    return response;
   } catch (error) {
     logError(error as Error, { path: '/api/auth/login' });
     return json(

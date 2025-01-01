@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
-import { SignJWT } from 'jose';
 import { prisma } from '$lib/server/prisma';
-import { hashPassword } from '$lib/server/auth';
+import { hashPassword, generateToken } from '$lib/server/auth';
 import { logger, logError } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
@@ -31,23 +30,21 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
     // Create user
     const user = await prisma.user.create({
       data: {
         email,
-        password: hashPassword(password),
+        password: hashedPassword,
       },
     });
 
     logger.info('New user registered', { email, userId: user.id });
 
-    // Create JWT token
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const token = await new SignJWT({ userId: user.id })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('24h')
-      .sign(secret);
+    // Generate JWT token
+    const token = await generateToken(user.id);
 
     // Create response with token cookie
     const response = json({ token });
