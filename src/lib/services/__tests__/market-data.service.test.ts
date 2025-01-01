@@ -1,66 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MarketDataService } from '../market-data.service';
-import type { 
-    MarketDataProvider,
-    PriceData,
-    OHLCVData,
-    OrderBookData,
-    ProviderConfig 
-} from '$lib/types/provider.types';
-import type { TokenInfo } from '$lib/types/token.types';
-import type { TimeFrame } from '$lib/types';
+import type { ProviderConfig } from '$lib/types/provider.types';
+import { fetchWithRetry } from '$lib/utils/fetch';
 
 // Mock logger
 vi.mock('$lib/server/logger', () => ({
     logger: {
-        error: vi.fn(),
-        info: vi.fn()
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
     }
 }));
 
-class MockProvider implements MarketDataProvider {
-    constructor(
-        public readonly name: string,
-        public readonly priority: number,
-        public readonly config: ProviderConfig,
-        private mockResponses: {
-            price?: PriceData;
-            ohlcv?: OHLCVData;
-            orderBook?: OrderBookData;
-            tokens?: TokenInfo[];
-        } = {}
-    ) {}
-
-    async initialize(): Promise<void> {}
-    async validateConfig(): Promise<boolean> { return true; }
-    async healthCheck(): Promise<boolean> { return true; }
-
-    async getPrice(): Promise<PriceData> {
-        if (!this.mockResponses.price) throw new Error('Mock price not set');
-        return this.mockResponses.price;
-    }
-
-    async getOHLCV(): Promise<OHLCVData> {
-        if (!this.mockResponses.ohlcv) throw new Error('Mock OHLCV not set');
-        return this.mockResponses.ohlcv;
-    }
-
-    async getOrderBook(): Promise<OrderBookData> {
-        if (!this.mockResponses.orderBook) throw new Error('Mock order book not set');
-        return this.mockResponses.orderBook;
-    }
-
-    async searchTokens(): Promise<TokenInfo[]> {
-        if (!this.mockResponses.tokens) throw new Error('Mock tokens not set');
-        return this.mockResponses.tokens;
-    }
-}
+// Mock fetch utility
+vi.mock('$lib/utils/fetch', () => ({
+    fetchWithRetry: vi.fn()
+}));
 
 describe('MarketDataService', () => {
     let service: MarketDataService;
-    let primaryProvider: MockProvider;
-    let fallbackProvider: MockProvider;
-
     const mockConfig: ProviderConfig = {
         apiKey: 'test-key',
         baseUrl: 'https://test.api',
@@ -73,155 +31,184 @@ describe('MarketDataService', () => {
         }
     };
 
-    beforeEach(async () => {
+    beforeEach(() => {
         service = new MarketDataService();
+        vi.clearAllMocks();
 
-        // Create providers with different priorities
-        primaryProvider = new MockProvider('primary', 2, mockConfig, {
-            price: {
-                value: 100,
-                timestamp: Date.now(),
-                source: 'primary'
+        // Mock the fetch function to handle different endpoints
+        (fetchWithRetry as any).mockImplementation((url: string) => {
+            // API verification endpoint
+            if (url.includes('/api/v1/auth/verify')) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => ({ 
+                        success: true,
+                        data: { verified: true }
+                    })
+                });
             }
+            
+            // For other endpoints, return a rejected promise to ensure explicit mocking
+            return Promise.reject(new Error('Endpoint not mocked'));
+        });
+    });
+
+    describe('registerProvider', () => {
+        it('should register a provider successfully', async () => {
+            await service.registerProvider('birdeye', mockConfig);
+            const providers = service.getProviders();
+            expect(providers).toHaveLength(1);
+            expect(providers[0].name).toBe('birdeye');
         });
 
-        fallbackProvider = new MockProvider('fallback', 1, mockConfig, {
-            price: {
-                value: 101,
-                timestamp: Date.now(),
-                source: 'fallback'
-            }
+        it('should register multiple providers and sort by priority', async () => {
+            await service.registerProvider('birdeye', mockConfig);
+            await service.registerProvider('jupiter', mockConfig);
+            
+            const providers = service.getProviders();
+            expect(providers).toHaveLength(2);
+            // Jupiter should be first due to higher priority
+            expect(providers[0].name).toBe('jupiter');
+            expect(providers[1].name).toBe('birdeye');
         });
 
-        // Register providers
-        await service.registerProvider(primaryProvider);
-        await service.registerProvider(fallbackProvider);
+        it('should throw error for invalid provider', async () => {
+            await expect(service.registerProvider('unknown', mockConfig))
+                .rejects
+                .toThrow('No builder registered for provider: unknown');
+        });
+
+        it('should handle API verification failure', async () => {
+            (fetchWithRetry as any).mockResolvedValueOnce({
+                ok: false,
+                status: 401
+            });
+
+            await expect(service.registerProvider('birdeye', mockConfig))
+                .rejects
+                .toThrow('Invalid API key');
+        });
     });
 
     describe('getPrice', () => {
         it('should get price from primary provider', async () => {
+            await service.registerProvider('birdeye', mockConfig);
+            
+            // Override the mock for price endpoint only
+            (fetchWithRetry as any).mockImplementationOnce((url: string) => {
+                if (url.includes('/api/v1/token/price/')) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: async () => ({
+                            success: true,
+                            data: {
+                                price: 100,
+                                timestamp: Date.now(),
+                                source: 'birdeye'
+                            }
+                        })
+                    });
+                }
+                // Fall back to default mock for other endpoints
+                return (fetchWithRetry as any).getMockImplementation()(url);
+            });
+
             const price = await service.getPrice('test-token');
             expect(price.value).toBe(100);
-            expect(price.source).toBe('primary');
+            expect(price.source).toBe('birdeye');
         });
 
         it('should fallback to secondary provider on error', async () => {
-            // Make primary provider fail
-            vi.spyOn(primaryProvider, 'getPrice').mockRejectedValueOnce(new Error('Failed'));
+            await service.registerProvider('birdeye', mockConfig);
+            await service.registerProvider('jupiter', mockConfig);
+            
+            // Mock Birdeye price request failure
+            (fetchWithRetry as any).mockImplementationOnce((url: string) => {
+                if (url.includes('/api/v1/token/price/')) {
+                    return Promise.reject(new Error('Failed'));
+                }
+                return (fetchWithRetry as any).getMockImplementation()(url);
+            });
+            
+            // Mock Jupiter price request success
+            (fetchWithRetry as any).mockImplementationOnce((url: string) => {
+                if (url.includes('/api/v1/token/price/')) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: async () => ({
+                            success: true,
+                            data: {
+                                price: 101,
+                                timestamp: Date.now(),
+                                source: 'jupiter'
+                            }
+                        })
+                    });
+                }
+                return (fetchWithRetry as any).getMockImplementation()(url);
+            });
 
             const price = await service.getPrice('test-token');
             expect(price.value).toBe(101);
-            expect(price.source).toBe('fallback');
+            expect(price.source).toBe('jupiter');
         });
 
         it('should throw if all providers fail', async () => {
-            // Make both providers fail
-            vi.spyOn(primaryProvider, 'getPrice').mockRejectedValueOnce(new Error('Failed'));
-            vi.spyOn(fallbackProvider, 'getPrice').mockRejectedValueOnce(new Error('Failed'));
+            await service.registerProvider('birdeye', mockConfig);
+            await service.registerProvider('jupiter', mockConfig);
+            
+            // Mock both providers failing
+            (fetchWithRetry as any)
+                .mockRejectedValueOnce(new Error('Failed'))
+                .mockRejectedValueOnce(new Error('Failed'));
 
-            await expect(service.getPrice('test-token')).rejects.toThrow('Failed to fetch price');
+            await expect(service.getPrice('test-token'))
+                .rejects
+                .toThrow('Failed to fetch price from all providers');
         });
     });
 
     describe('searchTokens', () => {
-        beforeEach(async () => {
-            // Update mock responses for token search
-            primaryProvider = new MockProvider('primary', 2, mockConfig, {
-                tokens: [{
-                    address: 'token1',
-                    chainId: 101,
-                    decimals: 9,
-                    name: 'Token One',
-                    symbol: 'ONE'
-                }]
-            });
+        it('should merge and deduplicate results from multiple providers', async () => {
+            await service.registerProvider('birdeye', mockConfig);
+            await service.registerProvider('jupiter', mockConfig);
+            
+            // Mock search responses
+            (fetchWithRetry as any)
+                .mockImplementationOnce((url: string) => {
+                    if (url.includes('/api/v1/token/search')) {
+                        return Promise.resolve({
+                            ok: true,
+                            json: async () => ({
+                                success: true,
+                                data: [
+                                    { address: 'token1', name: 'Token 1', symbol: 'TK1', source: 'birdeye' },
+                                    { address: 'token2', name: 'Token 2', symbol: 'TK2', source: 'birdeye' }
+                                ]
+                            })
+                        });
+                    }
+                    return (fetchWithRetry as any).getMockImplementation()(url);
+                })
+                .mockImplementationOnce((url: string) => {
+                    if (url.includes('/api/v1/token/search')) {
+                        return Promise.resolve({
+                            ok: true,
+                            json: async () => ({
+                                success: true,
+                                data: [
+                                    { address: 'token2', name: 'Token 2', symbol: 'TK2', source: 'jupiter' },
+                                    { address: 'token3', name: 'Token 3', symbol: 'TK3', source: 'jupiter' }
+                                ]
+                            })
+                        });
+                    }
+                    return (fetchWithRetry as any).getMockImplementation()(url);
+                });
 
-            fallbackProvider = new MockProvider('fallback', 1, mockConfig, {
-                tokens: [{
-                    address: 'token2',
-                    chainId: 101,
-                    decimals: 9,
-                    name: 'Token Two',
-                    symbol: 'TWO'
-                }]
-            });
-
-            // Re-register providers with new mock data
-            service = new MarketDataService();
-            await service.registerProvider(primaryProvider);
-            await service.registerProvider(fallbackProvider);
-        });
-
-        it('should merge results from multiple providers', async () => {
-            const tokens = await service.searchTokens('token');
-            expect(tokens).toHaveLength(2);
-            expect(tokens.map(t => t.symbol)).toContain('ONE');
-            expect(tokens.map(t => t.symbol)).toContain('TWO');
-        });
-
-        it('should deduplicate tokens by address', async () => {
-            // Update fallback provider to return a token with same address
-            fallbackProvider = new MockProvider('fallback', 1, mockConfig, {
-                tokens: [{
-                    address: 'token1', // Same as primary provider
-                    chainId: 101,
-                    decimals: 9,
-                    name: 'Token One Duplicate',
-                    symbol: 'ONE_DUP'
-                }]
-            });
-
-            service = new MarketDataService();
-            await service.registerProvider(primaryProvider);
-            await service.registerProvider(fallbackProvider);
-
-            const tokens = await service.searchTokens('token');
-            expect(tokens).toHaveLength(1);
-            expect(tokens[0].symbol).toBe('ONE'); // Should keep primary provider's version
-        });
-
-        it('should handle empty results', async () => {
-            // Make both providers return empty arrays
-            primaryProvider = new MockProvider('primary', 2, mockConfig, { tokens: [] });
-            fallbackProvider = new MockProvider('fallback', 1, mockConfig, { tokens: [] });
-
-            service = new MarketDataService();
-            await service.registerProvider(primaryProvider);
-            await service.registerProvider(fallbackProvider);
-
-            const tokens = await service.searchTokens('nonexistent');
-            expect(tokens).toHaveLength(0);
-        });
-    });
-
-    describe('provider management', () => {
-        it('should register new providers', async () => {
-            const newProvider = new MockProvider('new', 3, mockConfig);
-            await service.registerProvider(newProvider);
-
-            // The new provider should be used first due to higher priority
-            vi.spyOn(newProvider, 'getPrice').mockResolvedValueOnce({
-                value: 102,
-                timestamp: Date.now(),
-                source: 'new'
-            });
-
-            const price = await service.getPrice('test-token');
-            expect(price.value).toBe(102);
-            expect(price.source).toBe('new');
-        });
-
-        it('should handle provider health checks', async () => {
-            const healthStatus = await service.healthCheck();
-            expect(healthStatus.get('primary')).toBe(true);
-            expect(healthStatus.get('fallback')).toBe(true);
-        });
-
-        it('should handle provider initialization failures', async () => {
-            const failingProvider = new MockProvider('failing', 1, mockConfig);
-            vi.spyOn(failingProvider, 'initialize').mockRejectedValueOnce(new Error('Init failed'));
-
-            await expect(service.registerProvider(failingProvider)).rejects.toThrow();
+            const tokens = await service.searchTokens('test');
+            expect(tokens).toHaveLength(3);
+            expect(tokens.map(t => t.address)).toEqual(['token1', 'token2', 'token3']);
         });
     });
 }); 

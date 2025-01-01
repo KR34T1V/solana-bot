@@ -1,157 +1,282 @@
 import type { 
     MarketDataProvider,
-    ProviderConfig,
     PriceData,
     OHLCVData,
     OrderBookData,
-    ProviderError
+    ProviderConfig,
+    TimeFrame
 } from '$lib/types/provider.types';
 import type { TokenInfo } from '$lib/types/token.types';
-import type { TimeFrame } from '$lib/types';
 import { logger } from '$lib/server/logger';
+import { fetchWithRetry } from '$lib/utils/fetch';
+import { ProviderError, ProviderErrorType } from './__tests__/factory';
 
-export abstract class BaseProvider implements MarketDataProvider {
-    abstract readonly name: string;
-    abstract readonly priority: number;
-    
+export class BaseProvider implements MarketDataProvider {
+    public readonly name: string;
+    public readonly priority: number;
+    protected readonly baseUrl: string;
+    protected readonly apiKey: string;
+    protected readonly cache: Map<string, { data: any; timestamp: number }> = new Map();
+    protected readonly cacheTTL: number;
+
     constructor(
-        public readonly config: ProviderConfig,
-        protected cache: Map<string, { data: any; timestamp: number }> = new Map()
-    ) {}
+        name: string,
+        config: ProviderConfig,
+        priority: number,
+        cacheTTL: number = 30000
+    ) {
+        this.name = name;
+        this.baseUrl = config.baseUrl;
+        this.apiKey = config.apiKey;
+        this.priority = priority;
+        this.cacheTTL = cacheTTL;
+    }
 
     async initialize(): Promise<void> {
-        try {
-            await this.validateConfig();
-            logger.info('Provider initialized:', { provider: this.name });
-        } catch (error) {
-            logger.error('Provider initialization failed:', { 
-                provider: this.name,
-                error 
-            });
-            throw error;
-        }
+        await this.verifyApiKey();
     }
 
     async validateConfig(): Promise<boolean> {
-        try {
-            if (!this.config.baseUrl) {
-                throw new Error('Base URL is required');
-            }
-
-            if (this.config.timeout <= 0) {
-                throw new Error('Invalid timeout value');
-            }
-
-            if (this.config.retryAttempts < 0) {
-                throw new Error('Invalid retry attempts value');
-            }
-
-            return true;
-        } catch (error) {
-            logger.error('Config validation failed:', {
-                provider: this.name,
-                error
-            });
+        if (!this.baseUrl || !this.apiKey) {
+            logger.error(`${this.name} provider missing required configuration`);
             return false;
         }
+        return true;
     }
 
     async healthCheck(): Promise<boolean> {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-            
-            const response = await fetch(this.config.baseUrl, {
-                method: 'HEAD',
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            return response.ok;
+            await this.verifyApiKey();
+            return true;
         } catch (error) {
-            logger.error('Health check failed:', {
-                provider: this.name,
-                error
-            });
+            logger.error(`${this.name} health check failed:`, error);
             return false;
         }
     }
 
-    protected getCached<T>(key: string): T | null {
-        const entry = this.cache.get(key);
-        if (!entry) return null;
+    protected async verifyApiKey(): Promise<void> {
+        try {
+            const response = await fetchWithRetry(
+                `${this.baseUrl}/api/v1/auth/verify`,
+                {
+                    headers: {
+                        'X-API-KEY': this.apiKey
+                    }
+                }
+            );
 
-        const { data, timestamp } = entry;
-        const age = Date.now() - timestamp;
+            if (!response.ok) {
+                throw ProviderError.fromHttpStatus(response.status, 'Invalid API key', this.name);
+            }
 
-        if (age > this.config.rateLimits.windowMs) {
-            this.cache.delete(key);
-            return null;
+            const data = await response.json();
+            if (!data.success || !data.data || !data.data.verified) {
+                throw new ProviderError(ProviderErrorType.Unauthorized, 'Invalid API key', this.name);
+            }
+        } catch (error) {
+            logger.error(`Failed to verify ${this.name} API key:`, error);
+            if (error instanceof ProviderError) {
+                throw error;
+            }
+            throw new ProviderError(ProviderErrorType.Unauthorized, 'Invalid API key', this.name);
         }
-
-        return data as T;
     }
 
-    protected setCache<T>(key: string, data: T): void {
+    protected getCachedData<T>(key: string): T | null {
+        const cached = this.cache.get(key);
+        if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+            return cached.data as T;
+        }
+        return null;
+    }
+
+    protected setCachedData<T>(key: string, data: T): void {
         this.cache.set(key, {
             data,
             timestamp: Date.now()
         });
     }
 
-    protected createError(
-        operation: string,
-        message: string,
-        retryable: boolean = true,
-        retryAfter?: number
-    ): ProviderError {
-        return {
-            provider: this.name,
-            operation,
-            message,
-            timestamp: Date.now(),
-            retryable,
-            retryAfter
-        };
-    }
+    async getPrice(tokenAddress: string): Promise<PriceData> {
+        const cacheKey = `price:${tokenAddress}`;
+        const cached = this.getCachedData<PriceData>(cacheKey);
+        if (cached) return cached;
 
-    protected async fetchWithRetry(
-        url: string,
-        options: RequestInit = {},
-        attempt: number = 1
-    ): Promise<Response> {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-            
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
+            const response = await fetchWithRetry(
+                `${this.baseUrl}/api/v1/token/price/${tokenAddress}`,
+                {
+                    headers: {
+                        'X-API-KEY': this.apiKey
+                    }
+                }
+            );
 
-            if (response.status === 429 && attempt < this.config.retryAttempts) {
-                const retryAfter = parseInt(response.headers.get('retry-after') || '5', 10);
-                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-                return this.fetchWithRetry(url, options, attempt + 1);
+            if (!response.ok) {
+                throw ProviderError.fromHttpStatus(response.status, 'Failed to fetch price', this.name);
             }
 
-            return response;
+            const result = await response.json();
+            if (!result.success || !result.data) {
+                throw new ProviderError(ProviderErrorType.ServiceUnavailable, 'Invalid price data', this.name);
+            }
+
+            const price: PriceData = {
+                value: result.data.price,
+                timestamp: result.data.timestamp,
+                source: result.data.source || this.name
+            };
+
+            this.setCachedData(cacheKey, price);
+            return price;
         } catch (error) {
-            if (attempt < this.config.retryAttempts) {
-                await new Promise(resolve => 
-                    setTimeout(resolve, this.config.rateLimits.retryAfterMs)
-                );
-                return this.fetchWithRetry(url, options, attempt + 1);
+            logger.error(`Failed to fetch ${this.name} price:`, error);
+            if (error instanceof ProviderError) {
+                throw error;
             }
-            throw error;
+            throw ProviderError.fromError(error as Error, this.name);
         }
     }
 
-    // Abstract methods that must be implemented by specific providers
-    abstract getPrice(token: string): Promise<PriceData>;
-    abstract getOHLCV(token: string, timeframe: TimeFrame): Promise<OHLCVData>;
-    abstract getOrderBook(token: string, depth?: number): Promise<OrderBookData>;
-    abstract searchTokens(query: string): Promise<TokenInfo[]>;
+    async getOHLCV(
+        tokenAddress: string,
+        timeFrame: TimeFrame,
+        limit: number = 100
+    ): Promise<OHLCVData> {
+        const cacheKey = `ohlcv:${tokenAddress}:${timeFrame}:${limit}`;
+        const cached = this.getCachedData<OHLCVData>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const response = await fetchWithRetry(
+                `${this.baseUrl}/api/v1/token/ohlcv/${tokenAddress}`,
+                {
+                    headers: {
+                        'X-API-KEY': this.apiKey
+                    },
+                    params: {
+                        interval: timeFrame,
+                        limit: limit.toString()
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
+            }
+
+            const result = await response.json();
+            if (!result.success || !Array.isArray(result.data)) {
+                throw new ProviderError(ProviderErrorType.ServiceUnavailable, 'Invalid OHLCV data', this.name);
+            }
+
+            const ohlcv: OHLCVData = {
+                data: result.data.map(candle => ({
+                    timestamp: candle.timestamp,
+                    open: candle.open,
+                    high: candle.high,
+                    low: candle.low,
+                    close: candle.close,
+                    volume: candle.volume
+                })),
+                source: this.name
+            };
+
+            this.setCachedData(cacheKey, ohlcv);
+            return ohlcv;
+        } catch (error) {
+            logger.error(`Failed to fetch ${this.name} OHLCV:`, error);
+            if (error instanceof ProviderError) {
+                throw error;
+            }
+            throw ProviderError.fromError(error as Error, this.name);
+        }
+    }
+
+    async getOrderBook(
+        tokenAddress: string,
+        depth: number = 100
+    ): Promise<OrderBookData> {
+        const cacheKey = `orderbook:${tokenAddress}:${depth}`;
+        const cached = this.getCachedData<OrderBookData>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const response = await fetchWithRetry(
+                `${this.baseUrl}/api/v1/token/orderbook/${tokenAddress}`,
+                {
+                    headers: {
+                        'X-API-KEY': this.apiKey
+                    },
+                    params: {
+                        depth: depth.toString()
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
+            }
+
+            const result = await response.json();
+            if (!result.success || !result.data || !result.data.asks || !result.data.bids) {
+                throw new ProviderError(ProviderErrorType.ServiceUnavailable, 'Invalid order book data', this.name);
+            }
+
+            const orderBook: OrderBookData = {
+                asks: result.data.asks,
+                bids: result.data.bids,
+                timestamp: result.data.timestamp,
+                source: this.name
+            };
+
+            this.setCachedData(cacheKey, orderBook);
+            return orderBook;
+        } catch (error) {
+            logger.error(`Failed to fetch ${this.name} order book:`, error);
+            if (error instanceof ProviderError) {
+                throw error;
+            }
+            throw ProviderError.fromError(error as Error, this.name);
+        }
+    }
+
+    async searchTokens(query: string): Promise<TokenInfo[]> {
+        const cacheKey = `search:${query}`;
+        const cached = this.getCachedData<TokenInfo[]>(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const response = await fetchWithRetry(
+                `${this.baseUrl}/api/v1/token/search`,
+                {
+                    headers: {
+                        'X-API-KEY': this.apiKey
+                    },
+                    params: {
+                        query
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw ProviderError.fromHttpStatus(response.status, 'Failed to search tokens', this.name);
+            }
+
+            const result = await response.json();
+            if (!result.success || !Array.isArray(result.data)) {
+                throw new ProviderError(ProviderErrorType.ServiceUnavailable, 'Invalid search results', this.name);
+            }
+
+            const tokens = result.data;
+            this.setCachedData(cacheKey, tokens);
+            return tokens;
+        } catch (error) {
+            logger.error(`Failed to search ${this.name} tokens:`, error);
+            if (error instanceof ProviderError) {
+                throw error;
+            }
+            throw ProviderError.fromError(error as Error, this.name);
+        }
+    }
 } 
