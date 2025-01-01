@@ -3,11 +3,12 @@ import type { TokenInfo } from './token.types';
 export type TimeFrame = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w';
 
 export interface ProviderConfig {
-    apiKey: string;
-    baseUrl: string;
-    timeout: number;
-    retryAttempts: number;
-    rateLimits: {
+    baseUrl?: string;
+    apiKey?: string;
+    retryAttempts?: number;
+    maxRequests?: number;
+    timeout?: number;
+    rateLimits?: {
         maxRequests: number;
         windowMs: number;
         retryAfterMs: number;
@@ -20,43 +21,27 @@ export interface PriceData {
     source: string;
 }
 
-export interface OHLCVCandle {
-    timestamp: number;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-}
-
 export interface OHLCVData {
-    data: OHLCVCandle[];
-    source: string;
-}
-
-export interface OrderBookData {
-    asks: Array<{
-        price: number;
-        size: number;
-    }>;
-    bids: Array<{
-        price: number;
-        size: number;
-    }>;
-    timestamp: number;
+    data: {
+        timestamp: number;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+    }[];
     source: string;
 }
 
 export interface MarketDataProvider {
     readonly name: string;
     readonly priority: number;
-    initialize(): Promise<void>;
-    validateConfig(): Promise<boolean>;
-    healthCheck(): Promise<boolean>;
+    readonly cacheTTL: number;
+
+    verifyApiKey(): Promise<void>;
     getPrice(tokenAddress: string): Promise<PriceData>;
-    getOHLCV(tokenAddress: string, timeFrame: TimeFrame, limit?: number): Promise<OHLCVData>;
-    getOrderBook(tokenAddress: string, depth?: number): Promise<OrderBookData>;
-    searchTokens(query: string): Promise<TokenInfo[]>;
+    getOHLCV(tokenAddress: string, timeFrame: string, limit?: number): Promise<OHLCVData>;
+    searchTokens(query: string): Promise<import('./token.types').TokenInfo[]>;
 }
 
 export interface ProviderError {

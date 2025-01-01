@@ -1,81 +1,57 @@
-import type { ProviderBuilder } from './provider.builder';
 import type { MarketDataProvider, ProviderConfig } from '$lib/types/provider.types';
-import { logger } from '$lib/server/logger';
 
-export abstract class BaseProviderBuilder implements ProviderBuilder {
-    protected priority: number = 1;
-    protected cacheTTL: number = 30000;
+export abstract class BaseProviderBuilder {
+    protected priority: number = 0;
+    protected cacheTTL: number = 60 * 1000; // 1 minute default
     protected retryAttempts: number = 3;
+    protected maxRequests: number = 100;
     protected retryDelay: number = 1000;
-    protected maxRequests: number = 10;
-    protected windowMs: number = 1000;
+    protected rateLimitWindow: number = 60000;
 
-    abstract build(config: ProviderConfig): MarketDataProvider;
-
-    withPriority(priority: number): ProviderBuilder {
-        if (priority < 1) {
-            logger.warn('Priority must be >= 1, using default value of 1');
-            this.priority = 1;
-        } else {
-            this.priority = priority;
-        }
+    withPriority(priority: number): this {
+        this.priority = priority > 0 ? priority : 1;
         return this;
     }
 
-    withCacheTTL(ttl: number): ProviderBuilder {
-        if (ttl < 0) {
-            logger.warn('Cache TTL must be >= 0, using default value of 30000');
-            this.cacheTTL = 30000;
-        } else {
-            this.cacheTTL = ttl;
-        }
+    withCacheTTL(ttl: number): this {
+        this.cacheTTL = ttl > 0 ? ttl : 60 * 1000;
         return this;
     }
 
-    withRetryPolicy(attempts: number, delay: number): ProviderBuilder {
-        if (attempts < 0) {
-            logger.warn('Retry attempts must be >= 0, using default value of 3');
-            this.retryAttempts = 3;
-        } else {
-            this.retryAttempts = attempts;
-        }
-
-        if (delay < 0) {
-            logger.warn('Retry delay must be >= 0, using default value of 1000');
-            this.retryDelay = 1000;
-        } else {
-            this.retryDelay = delay;
-        }
+    withRetryAttempts(attempts: number): this {
+        this.retryAttempts = attempts > 0 ? attempts : 3;
         return this;
     }
 
-    withRateLimits(maxRequests: number, windowMs: number): ProviderBuilder {
-        if (maxRequests < 1) {
-            logger.warn('Max requests must be >= 1, using default value of 10');
-            this.maxRequests = 10;
-        } else {
-            this.maxRequests = maxRequests;
-        }
-
-        if (windowMs < 100) {
-            logger.warn('Window ms must be >= 100, using default value of 1000');
-            this.windowMs = 1000;
-        } else {
-            this.windowMs = windowMs;
-        }
+    withMaxRequests(maxRequests: number): this {
+        this.maxRequests = maxRequests > 0 ? maxRequests : 100;
         return this;
     }
 
-    protected createConfig(baseConfig: ProviderConfig): ProviderConfig {
+    withRetryPolicy(attempts: number, delay: number): this {
+        this.retryAttempts = attempts > 0 ? attempts : 3;
+        this.retryDelay = delay > 0 ? delay : 1000;
+        return this;
+    }
+
+    withRateLimits(maxRequests: number, windowMs: number): this {
+        this.maxRequests = maxRequests > 0 ? maxRequests : 100;
+        this.rateLimitWindow = windowMs > 0 ? windowMs : 60000;
+        return this;
+    }
+
+    protected createConfig(config: ProviderConfig): ProviderConfig {
         return {
-            ...baseConfig,
+            ...config,
             retryAttempts: this.retryAttempts,
-            timeout: this.retryDelay,
+            maxRequests: this.maxRequests,
             rateLimits: {
                 maxRequests: this.maxRequests,
-                windowMs: this.windowMs,
+                windowMs: this.rateLimitWindow,
                 retryAfterMs: this.retryDelay
             }
         };
     }
+
+    abstract build(config: ProviderConfig): MarketDataProvider;
 } 

@@ -1,12 +1,9 @@
 export interface TokenInfo {
     address: string;
-    chainId: number;
-    decimals: number;
-    name: string;
     symbol: string;
+    name: string;
+    decimals: number;
     logoURI?: string;
+    chainId: number;
     tags?: string[];
-    extensions?: {
-        [key: string]: any;
-    };
 } 

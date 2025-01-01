@@ -1,89 +1,100 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ProviderFactory } from '../provider.factory';
-import { BirdeyeProviderBuilder } from '../birdeye.builder';
-import { JupiterProviderBuilder } from '../jupiter.builder';
-import type { ProviderConfig } from '$lib/types/provider.types';
-
-// Mock logger
-vi.mock('$lib/server/logger', () => ({
-    logger: {
-        info: vi.fn(),
-        error: vi.fn(),
-        warn: vi.fn()
-    }
-}));
+import type { MarketDataProvider } from '$lib/types/provider.types';
 
 describe('ProviderFactory', () => {
     let factory: ProviderFactory;
-    const mockConfig: ProviderConfig = {
-        apiKey: 'test-key',
-        baseUrl: 'https://test.api',
-        timeout: 5000,
-        retryAttempts: 3,
-        rateLimits: {
-            maxRequests: 10,
-            windowMs: 1000,
-            retryAfterMs: 1000
-        }
-    };
 
     beforeEach(() => {
         factory = ProviderFactory.getInstance();
+        factory.clearProviders();
     });
 
-    describe('getInstance', () => {
-        it('should return the same instance', () => {
-            const instance1 = ProviderFactory.getInstance();
-            const instance2 = ProviderFactory.getInstance();
-            expect(instance1).toBe(instance2);
-        });
+    it('should be a singleton', () => {
+        const instance1 = ProviderFactory.getInstance();
+        const instance2 = ProviderFactory.getInstance();
+        expect(instance1).toBe(instance2);
     });
 
-    describe('registerBuilder', () => {
-        it('should register a builder', () => {
-            const builder = new BirdeyeProviderBuilder();
-            factory.registerBuilder('birdeye', builder);
-            expect(factory.hasBuilder('birdeye')).toBe(true);
+    it('should register Birdeye provider', () => {
+        factory.registerProvider('birdeye', {
+            apiKey: 'test-key'
         });
 
-        it('should override existing builder', () => {
-            const builder1 = new BirdeyeProviderBuilder();
-            const builder2 = new BirdeyeProviderBuilder();
-            
-            factory.registerBuilder('birdeye', builder1);
-            factory.registerBuilder('birdeye', builder2);
-            
-            expect(factory.hasBuilder('birdeye')).toBe(true);
-            expect(factory.getRegisteredProviders()).toHaveLength(1);
-        });
+        const provider = factory.getProvider('birdeye');
+        expect(provider).toBeDefined();
+        expect(provider?.name).toBe('birdeye');
+        expect(provider?.priority).toBe(1);
     });
 
-    describe('createProvider', () => {
-        it('should create a provider using registered builder', () => {
-            const builder = new BirdeyeProviderBuilder();
-            factory.registerBuilder('birdeye', builder);
-            
-            const provider = factory.createProvider('birdeye', mockConfig);
-            expect(provider).toBeDefined();
-            expect(provider.name).toBe('birdeye');
-        });
+    it('should register Jupiter provider', () => {
+        factory.registerProvider('jupiter', {});
 
-        it('should throw error for unregistered provider', () => {
-            expect(() => {
-                factory.createProvider('unknown', mockConfig);
-            }).toThrow('No builder registered for provider: unknown');
-        });
+        const provider = factory.getProvider('jupiter');
+        expect(provider).toBeDefined();
+        expect(provider?.name).toBe('jupiter');
+        expect(provider?.priority).toBe(2);
     });
 
-    describe('getRegisteredProviders', () => {
-        it('should return list of registered providers', () => {
-            factory.registerBuilder('birdeye', new BirdeyeProviderBuilder());
-            factory.registerBuilder('jupiter', new JupiterProviderBuilder());
-            
-            const providers = factory.getRegisteredProviders();
-            expect(providers).toContain('birdeye');
-            expect(providers).toContain('jupiter');
-            expect(providers).toHaveLength(2);
+    it('should not register unknown provider', () => {
+        factory.registerProvider('unknown', {});
+        expect(factory.getProvider('unknown')).toBeUndefined();
+    });
+
+    it('should not register duplicate provider', () => {
+        factory.registerProvider('birdeye', {
+            apiKey: 'test-key-1'
         });
+
+        factory.registerProvider('birdeye', {
+            apiKey: 'test-key-2'
+        });
+
+        const providers = factory.getAllProviders();
+        expect(providers.length).toBe(1);
+        expect(providers[0].name).toBe('birdeye');
+    });
+
+    it('should get providers sorted by priority', () => {
+        factory.registerProvider('jupiter', {});
+        factory.registerProvider('birdeye', {
+            apiKey: 'test-key'
+        });
+
+        const providers = factory.getAllProviders();
+        expect(providers.length).toBe(2);
+        expect(providers[0].name).toBe('birdeye');
+        expect(providers[1].name).toBe('jupiter');
+    });
+
+    it('should remove provider', () => {
+        factory.registerProvider('birdeye', {
+            apiKey: 'test-key'
+        });
+
+        expect(factory.getProvider('birdeye')).toBeDefined();
+        factory.removeProvider('birdeye');
+        expect(factory.getProvider('birdeye')).toBeUndefined();
+    });
+
+    it('should clear all providers', () => {
+        factory.registerProvider('birdeye', {
+            apiKey: 'test-key'
+        });
+        factory.registerProvider('jupiter', {});
+
+        expect(factory.getAllProviders().length).toBe(2);
+        factory.clearProviders();
+        expect(factory.getAllProviders().length).toBe(0);
+    });
+
+    it('should handle case-insensitive provider names', () => {
+        factory.registerProvider('BIRDEYE', {
+            apiKey: 'test-key'
+        });
+
+        expect(factory.getProvider('birdeye')).toBeDefined();
+        expect(factory.getProvider('BIRDEYE')).toBeDefined();
+        expect(factory.getProvider('Birdeye')).toBeDefined();
     });
 }); 
