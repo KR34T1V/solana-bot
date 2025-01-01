@@ -5,6 +5,7 @@
   import { invalidate } from '$app/navigation';
   import { goto } from '$app/navigation';
   import { derived } from 'svelte/store';
+  import ToastContainer from '$lib/components/ui/ToastContainer.svelte';
 
   // Create a derived store for auth state
   const isLoggedIn = derived(page, $page => $page.data.userId != null);
@@ -99,4 +100,7 @@
   <main>
     <slot />
   </main>
+
+  <!-- Toast notifications -->
+  <ToastContainer />
 </div> 
