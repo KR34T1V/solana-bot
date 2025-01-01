@@ -6,8 +6,45 @@
 graph TD
     A[Frontend - Svelte 5] --> B[SvelteKit Server]
     B --> C[Trading Services]
-    C --> D[Solana/BirdEye Integration]
-    B --> E[Database - Prisma]
+    C --> D[Market Data Providers]
+    D --> E[BirdEye API]
+    D --> F[Jupiter API]
+    C --> G[Strategy Engine]
+    G --> H[Database - Prisma]
+    B --> I[Authentication]
+    I --> J[JWT/Session]
+```
+
+## System Components
+
+### 1. Frontend Layer
+- Svelte 5 with TypeScript
+- Component-based architecture
+- Reactive state management
+- Toast-based error display
+- Type-safe props and events
+
+### 2. Server Layer
+- SvelteKit with SSR
+- API route handling
+- Authentication middleware
+- Request validation
+- Error boundaries
+
+### 3. Trading Infrastructure
+```typescript
+// Market Data Providers
+abstract class BaseProvider {
+  abstract getPrice(token: string): Promise<PriceData>;
+  abstract getOHLCV(token: string, timeframe: TimeFrame): Promise<OHLCVData>;
+}
+
+// Strategy Engine
+interface StrategyConfig {
+  timeframe: string;
+  profitTarget: number;
+  stopLoss: number;
+}
 ```
 
 ## Critical Files & Their Purpose
@@ -67,6 +104,51 @@ service.test.ts     // Service tests
 api.test.ts         // API tests
 ```
 
+## Security Architecture
+
+### 1. Authentication
+- JWT-based with 7-day expiry
+- Password hashing (bcrypt)
+- Session management
+- Rate limiting
+
+### 2. API Security
+```typescript
+class ApiKeyService {
+  private encryptApiKey(key: string): string {
+    // AES-256-CBC encryption
+  }
+  
+  private validateEncryptionKey() {
+    // Key validation
+  }
+}
+```
+
+## Trading Features
+
+### 1. Strategy Implementation
+```typescript
+// Mean Reversion Strategy
+interface MeanReversionConfig extends BaseStrategyConfig {
+  deviationThreshold: number;
+  lookbackPeriod: number;
+}
+
+// Trend Following Strategy
+interface TrendFollowingConfig extends BaseStrategyConfig {
+  fastMA: number;
+  slowMA: number;
+  momentumPeriod: number;
+}
+```
+
+### 2. Risk Management
+- Position size calculation
+- Stop-loss enforcement
+- Profit targets
+- Portfolio balance
+
 ## Development Workflow
 
 ### 1. Environment Setup
@@ -83,87 +165,6 @@ npx prisma migrate dev
 yarn dev          # Start development
 yarn test         # Run tests
 yarn build        # Production build
-```
-
-## Critical Paths
-
-### 1. Trading Flow
-```typescript
-// Key files involved
-src/lib/services/trading.service.ts
-src/lib/services/birdeye.service.ts
-src/routes/dashboard/+page.svelte
-```
-
-### 2. Authentication Flow
-```typescript
-// Key files involved
-src/lib/server/auth.ts
-src/routes/auth/+page.server.ts
-src/hooks.server.ts
-```
-
-## Type System
-
-### 1. Core Types
-```typescript
-// Located in src/lib/types/
-interface Strategy {
-  id: string;
-  type: string;
-  config: Record<string, unknown>;
-}
-
-interface Trade {
-  pair: string;
-  amount: number;
-  type: 'BUY' | 'SELL';
-}
-```
-
-### 2. API Contracts
-```typescript
-// Located in src/routes/api/
-interface TradeRequest {
-  tokenAddress: string;
-  amount: number;
-  slippage: number;
-}
-```
-
-## Security Considerations
-
-### 1. API Keys
-- Stored encrypted in database
-- Never exposed to client
-- Rotated regularly
-
-### 2. Authentication
-- JWT-based
-- Session management
-- Rate limiting
-
-## Common Patterns
-
-### 1. Error Handling
-```typescript
-try {
-  // Operation
-} catch (error) {
-  logger.error('Operation failed', { error });
-  throw new TradingError(error.message);
-}
-```
-
-### 2. Data Fetching
-```typescript
-// Server-side data loading
-export const load = async ({ locals }) => {
-  const strategies = await prisma.strategy.findMany({
-    where: { userId: locals.userId }
-  });
-  return { strategies };
-};
 ```
 
 ## Testing Requirements
@@ -217,6 +218,20 @@ export const load = async ({ locals }) => {
  * />
  */
 ```
+
+## Known Limitations
+
+### 1. Solana Integration
+- Limited Web3.js implementation
+- Wallet connection handling needed
+- Transaction management to be improved
+- RPC configuration required
+
+### 2. Deployment
+- Missing CI/CD configuration
+- Production environment setup needed
+- Monitoring configuration required
+- Backup strategies to be implemented
 
 ## Debugging Tools
 
