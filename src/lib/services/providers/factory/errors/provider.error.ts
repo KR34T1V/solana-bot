@@ -1,10 +1,14 @@
 export enum ProviderErrorType {
-    Unknown = 'UNKNOWN',
-    NotFound = 'NOT_FOUND',
     Unauthorized = 'UNAUTHORIZED',
-    RateLimited = 'RATE_LIMITED',
+    RateLimitExceeded = 'RATE_LIMIT_EXCEEDED',
     ServiceUnavailable = 'SERVICE_UNAVAILABLE',
-    InvalidResponse = 'INVALID_RESPONSE'
+    NotImplemented = 'NOT_IMPLEMENTED',
+    InvalidResponse = 'INVALID_RESPONSE',
+    NetworkError = 'NETWORK_ERROR',
+    NotFound = 'NOT_FOUND',
+    BadRequest = 'BAD_REQUEST',
+    RateLimited = 'RATE_LIMITED',
+    Unknown = 'UNKNOWN'
 }
 
 export class ProviderError extends Error {
@@ -22,6 +26,10 @@ export class ProviderError extends Error {
         let defaultMessage: string;
 
         switch (status) {
+            case 400:
+                type = ProviderErrorType.BadRequest;
+                defaultMessage = 'Bad request';
+                break;
             case 401:
             case 403:
                 type = ProviderErrorType.Unauthorized;
@@ -29,28 +37,52 @@ export class ProviderError extends Error {
                 break;
             case 404:
                 type = ProviderErrorType.NotFound;
-                defaultMessage = 'Not found';
+                defaultMessage = 'Resource not found';
                 break;
             case 429:
                 type = ProviderErrorType.RateLimited;
-                defaultMessage = 'Rate limited';
+                defaultMessage = 'Rate limit exceeded';
                 break;
+            case 501:
+                type = ProviderErrorType.NotImplemented;
+                defaultMessage = 'Not implemented';
+                break;
+            case 502:
             case 503:
+            case 504:
                 type = ProviderErrorType.ServiceUnavailable;
                 defaultMessage = 'Service unavailable';
                 break;
             default:
                 type = ProviderErrorType.Unknown;
-                defaultMessage = 'Unknown error';
+                defaultMessage = `HTTP ${status}`;
         }
 
-        return new ProviderError(type, message || defaultMessage, provider || 'unknown');
+        return new ProviderError(
+            type,
+            message || defaultMessage,
+            provider || 'unknown'
+        );
     }
 
     static fromError(error: Error, provider?: string): ProviderError {
         if (error instanceof ProviderError) {
             return error;
         }
-        return new ProviderError(ProviderErrorType.Unknown, error.message, provider || 'unknown');
+
+        // Network errors
+        if (error instanceof TypeError && error.message.includes('network')) {
+            return new ProviderError(
+                ProviderErrorType.NetworkError,
+                'Network error occurred',
+                provider || 'unknown'
+            );
+        }
+
+        return new ProviderError(
+            ProviderErrorType.Unknown,
+            error.message,
+            provider || 'unknown'
+        );
     }
 } 
