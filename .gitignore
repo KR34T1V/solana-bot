@@ -29,8 +29,8 @@ logs
 *.log
 
 # Database
-prisma/*.db
-prisma/*.db-journal
+prisma/**/*.db
+prisma/**/*.db-journal
 
 # Editor directories and files
 .vscode/*
