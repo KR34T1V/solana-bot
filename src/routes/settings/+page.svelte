@@ -9,9 +9,26 @@
   let showAddKey = false;
   let loading = false;
   let showApiKey = false;
+  let selectedProvider = 'birdeye';
 
   $: ({ apiKeys } = data);
   $: birdeyeKey = apiKeys.find(key => key.provider === 'birdeye');
+  $: jupiterKey = apiKeys.find(key => key.provider === 'jupiter');
+
+  const providers = [
+    { 
+      id: 'birdeye', 
+      name: 'Birdeye', 
+      description: 'Real-time Solana token data and analytics',
+      docUrl: 'https://birdeye.so/api'
+    },
+    { 
+      id: 'jupiter', 
+      name: 'Jupiter', 
+      description: 'Solana token price aggregation and swap routing',
+      docUrl: 'https://docs.jup.ag/apis/price-api'
+    }
+  ];
 
   function formatDate(date: string | Date) {
     return new Date(date).toLocaleDateString();
@@ -19,6 +36,10 @@
 
   function toggleApiKeyVisibility() {
     showApiKey = !showApiKey;
+  }
+
+  function getProviderDetails(providerId: string) {
+    return providers.find(p => p.id === providerId);
   }
 </script>
 
@@ -29,7 +50,10 @@
   <div class="bg-white rounded-lg shadow">
     <div class="px-6 py-4 border-b border-gray-200">
       <div class="flex justify-between items-center">
-        <h2 class="text-lg font-semibold">API Keys</h2>
+        <div>
+          <h2 class="text-lg font-semibold">API Keys</h2>
+          <p class="text-sm text-gray-500 mt-1">Manage your data provider API keys</p>
+        </div>
         {#if !showAddKey}
           <button
             class="btn btn-primary"
@@ -56,31 +80,48 @@
 
       {#if showAddKey}
         <div class="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h3 class="text-lg font-medium mb-4">Add Birdeye API Key</h3>
+          <h3 class="text-lg font-medium mb-4">Add API Key</h3>
           <form
             method="POST"
-            action="?/saveBirdeyeKey"
+            action="?/saveApiKey"
             use:enhance={() => {
               loading = true;
-              console.log('Form submission started');
               return async ({ result, update }) => {
-                console.log('Form submission result:', result);
                 loading = false;
                 
                 if (result.type === 'success') {
-                  console.log('API key saved successfully');
                   showAddKey = false;
                   await invalidateAll();
-                } else if (result.type === 'failure') {
-                  console.error('Failed to save API key:', result.data?.error);
                 }
                 
-                // Always update the form to show any error messages
                 await update();
               };
             }}
           >
             <div class="space-y-4">
+              <div>
+                <label for="provider" class="block text-sm font-medium text-gray-700">Provider</label>
+                <select
+                  id="provider"
+                  name="provider"
+                  bind:value={selectedProvider}
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  {#each providers as provider}
+                    <option value={provider.id}>{provider.name}</option>
+                  {/each}
+                </select>
+                {#if selectedProvider}
+                  {@const provider = getProviderDetails(selectedProvider)}
+                  <p class="mt-1 text-sm text-gray-500">
+                    {provider?.description}
+                    <a href={provider?.docUrl} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700">
+                      View API docs →
+                    </a>
+                  </p>
+                {/if}
+              </div>
+
               <div>
                 <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
                 <input
@@ -92,6 +133,7 @@
                   placeholder="e.g., Production Key"
                 />
               </div>
+
               <div>
                 <label for="key" class="block text-sm font-medium text-gray-700">API Key</label>
                 <div class="mt-1 relative">
@@ -101,7 +143,7 @@
                     name="key"
                     required
                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 pr-10"
-                    placeholder="Enter your Birdeye API key"
+                    placeholder="Enter your API key"
                   />
                   <button
                     type="button"
@@ -120,8 +162,8 @@
                     {/if}
                   </button>
                 </div>
-                <p class="mt-1 text-sm text-gray-500">Your Birdeye API key from https://birdeye.so/api</p>
               </div>
+
               <div class="flex justify-end space-x-3">
                 <button
                   type="button"
@@ -154,17 +196,23 @@
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Verified</th>
                 <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               {#each apiKeys as apiKey}
+                {@const provider = getProviderDetails(apiKey.provider)}
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {apiKey.name}
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{apiKey.name}</div>
+                    <div class="text-sm text-gray-500">{provider?.description || ''}</div>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {apiKey.provider}
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">{provider?.name || apiKey.provider}</div>
+                    <a href={provider?.docUrl} target="_blank" rel="noopener noreferrer" class="text-xs text-blue-500 hover:text-blue-700">
+                      API Docs
+                    </a>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(apiKey.createdAt)}
@@ -175,26 +223,55 @@
                       {apiKey.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {apiKey.lastVerified ? formatDate(apiKey.lastVerified) : 'Never'}
+                  </td>
                   <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <form
-                      method="POST"
-                      action="?/deleteApiKey"
-                      use:enhance={() => {
-                        return async ({ result }) => {
-                          if (result.type === 'success') {
-                            await invalidateAll();
-                          }
-                        };
-                      }}
-                    >
-                      <input type="hidden" name="provider" value={apiKey.provider} />
-                      <button
-                        type="submit"
-                        class="text-red-600 hover:text-red-900"
+                    <div class="flex justify-end space-x-3">
+                      <form
+                        method="POST"
+                        action="?/verifyApiKey"
+                        class="inline"
+                        use:enhance={() => {
+                          loading = true;
+                          return async ({ result }) => {
+                            loading = false;
+                            if (result.type === 'success') {
+                              await invalidateAll();
+                            }
+                          };
+                        }}
                       >
-                        Delete
-                      </button>
-                    </form>
+                        <input type="hidden" name="provider" value={apiKey.provider} />
+                        <button
+                          type="submit"
+                          class="text-blue-600 hover:text-blue-900"
+                          disabled={loading}
+                        >
+                          Verify
+                        </button>
+                      </form>
+                      <form
+                        method="POST"
+                        action="?/deleteApiKey"
+                        class="inline"
+                        use:enhance={() => {
+                          return async ({ result }) => {
+                            if (result.type === 'success') {
+                              await invalidateAll();
+                            }
+                          };
+                        }}
+                      >
+                        <input type="hidden" name="provider" value={apiKey.provider} />
+                        <button
+                          type="submit"
+                          class="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               {/each}
@@ -204,6 +281,7 @@
       {:else}
         <div class="text-center py-8">
           <p class="text-gray-500">No API keys added yet.</p>
+          <p class="text-sm text-gray-400 mt-1">Add an API key to start using market data providers.</p>
         </div>
       {/if}
     </div>
