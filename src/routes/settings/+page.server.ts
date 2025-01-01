@@ -1,18 +1,13 @@
-import { redirect, error, fail } from '@sveltejs/kit';
+import { redirect, error } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { prisma } from '$lib/server/prisma';
 import { BirdeyeService } from '$lib/services/birdeye.service';
 import { ApiKeyService } from '$lib/services/api-key.service';
+import { logger } from '$lib/server/logger';
 
 // Initialize services
-let birdeyeService = new BirdeyeService();
-let apiKeyService = new ApiKeyService(prisma);
-
-// Allow overriding services for testing
-export const setServices = (birdeye: BirdeyeService, apiKey: ApiKeyService) => {
-    birdeyeService = birdeye;
-    apiKeyService = apiKey;
-};
+const birdeyeService = new BirdeyeService(prisma);
+const apiKeyService = new ApiKeyService(prisma);
 
 export const load: PageServerLoad = async ({ locals }) => {
     if (!locals.userId) {
@@ -41,7 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
     saveBirdeyeKey: async ({ request, locals }) => {
         if (!locals.userId) {
-            console.error('Unauthorized: No user ID in locals');
+            logger.error('Unauthorized: No user ID in locals');
             throw error(401, { message: 'Unauthorized' });
         }
 
@@ -49,10 +44,10 @@ export const actions: Actions = {
         const name = data.get('name')?.toString();
         const key = data.get('key')?.toString();
 
-        console.log('Received API key save request:', { name, hasKey: !!key });
+        logger.info('Received API key save request:', { metadata: { name, hasKey: !!key } });
 
         if (!name || !key) {
-            console.error('Missing required fields:', { name: !!name, key: !!key });
+            logger.error('Missing required fields:', { metadata: { name: !!name, key: !!key } });
             return {
                 error: 'Name and API key are required',
                 status: 400
@@ -61,18 +56,18 @@ export const actions: Actions = {
 
         try {
             // Verify the API key
-            console.log('Verifying API key...');
+            logger.info('Verifying API key...');
             const isValid = await birdeyeService.verifyApiKey(key);
             
             if (!isValid) {
-                console.error('Invalid API key');
+                logger.error('Invalid API key');
                 return {
                     error: 'Invalid API key',
                     status: 400
                 };
             }
 
-            console.log('API key verified, saving...');
+            logger.info('API key verified, saving...');
             await apiKeyService.upsertApiKey({
                 userId: locals.userId,
                 provider: 'birdeye',
@@ -80,12 +75,12 @@ export const actions: Actions = {
                 key
             });
 
-            console.log('API key saved successfully');
+            logger.info('API key saved successfully');
             return {
                 success: true
             };
         } catch (err) {
-            console.error('Error saving API key:', err);
+            logger.error('Error saving API key:', err);
             return {
                 error: err instanceof Error ? err.message : 'Failed to save API key',
                 status: 500
@@ -114,7 +109,7 @@ export const actions: Actions = {
                 success: true
             };
         } catch (err) {
-            console.error('Error deleting API key:', err);
+            logger.error('Error deleting API key:', err);
             return {
                 error: 'Failed to delete API key',
                 status: 500
