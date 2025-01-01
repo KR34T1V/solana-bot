@@ -1,44 +1,27 @@
-export interface BirdeyeTokenPrice {
+export interface TokenPrice {
     value: number;
     updateUnixTime: number;
+    updateHour: number;
 }
 
-export interface BirdeyePriceResponse {
-    success: boolean;
-    data: BirdeyeTokenPrice;
-    message?: string;
-}
-
-export interface BirdeyePairInfo {
+export interface TokenMetadata {
     address: string;
+    symbol: string;
     name: string;
-    baseToken: string;
-    quoteToken: string;
-    baseTokenSymbol: string;
-    quoteTokenSymbol: string;
-    volume24h: number;
-    priceChange24h: number;
+    decimals: number;
 }
 
-export interface BirdeyePairResponse {
+export interface TokenPriceHistory {
+    prices: TokenPrice[];
+    timeframe: string;
+    startTime: number;
+    endTime: number;
+}
+
+export type TimeFrame = '1H' | '1D' | '1W' | '1M' | '1Y';
+
+export interface BirdeyeApiResponse<T> {
     success: boolean;
-    data: BirdeyePairInfo;
-    message?: string;
-}
-
-export interface BirdeyeOHLCV {
-    unixTime: number;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-}
-
-export interface BirdeyeOHLCVResponse {
-    success: boolean;
-    data: {
-        items: BirdeyeOHLCV[];
-    };
-    message?: string;
+    data: T;
+    timestamp: number;
 } 
