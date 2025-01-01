@@ -5,6 +5,7 @@
 
   export let selectedToken: TokenInfo | undefined = undefined;
   export let recentTokens: TokenInfo[] = [];
+  export let searchResults: TokenInfo[] = [];
   export let loading = false;
   export let error: string | undefined = undefined;
 
@@ -14,16 +15,25 @@
   }>();
 
   let searchQuery = '';
+  let searchTimeout: NodeJS.Timeout;
 
   function handleSearch() {
+    clearTimeout(searchTimeout);
     if (searchQuery.trim()) {
-      dispatch('search', searchQuery.trim());
+      searchTimeout = setTimeout(() => {
+        dispatch('search', searchQuery.trim());
+      }, 300);
     }
   }
 
   function handleSelect(token: TokenInfo) {
     selectedToken = token;
     dispatch('select', token);
+  }
+
+  // Clear search results when query is empty
+  $: if (!searchQuery.trim()) {
+    searchResults = [];
   }
 </script>
 
@@ -36,11 +46,42 @@
       {error}
       disabled={loading}
       className="flex-1"
-      on:input={() => handleSearch()}
+      on:input={handleSearch}
+      on:keyup={handleSearch}
     />
   </div>
 
-  {#if recentTokens.length > 0}
+  {#if loading}
+    <div class="flex justify-center py-4">
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+    </div>
+  {/if}
+
+  {#if searchResults.length > 0}
+    <Card title="Search Results" className="mt-4">
+      <div class="space-y-2">
+        {#each searchResults as token}
+          <button
+            class="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-md transition-colors {selectedToken?.address === token.address ? 'bg-blue-50' : ''}"
+            on:click={() => handleSelect(token)}
+            disabled={loading}
+          >
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-medium">{token.symbol}</span>
+                <span class="text-sm text-gray-500 ml-2">{token.name}</span>
+              </div>
+              {#if selectedToken?.address === token.address}
+                <span class="text-blue-500">✓</span>
+              {/if}
+            </div>
+          </button>
+        {/each}
+      </div>
+    </Card>
+  {/if}
+
+  {#if recentTokens.length > 0 && !searchResults.length}
     <Card title="Recent Tokens" className="mt-4">
       <div class="space-y-2">
         {#each recentTokens as token}
@@ -54,7 +95,9 @@
                 <span class="font-medium">{token.symbol}</span>
                 <span class="text-sm text-gray-500 ml-2">{token.name}</span>
               </div>
-              <span class="text-xs text-gray-400">{token.address.slice(0, 8)}...{token.address.slice(-6)}</span>
+              {#if selectedToken?.address === token.address}
+                <span class="text-blue-500">✓</span>
+              {/if}
             </div>
           </button>
         {/each}
