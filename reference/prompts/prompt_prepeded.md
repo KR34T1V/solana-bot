@@ -175,4 +175,4 @@ Your response should emphasize:
 - Security best practices
 - Scalability considerations
 
-Format your response using proper markdown headings, code blocks, and bullet points.
+Format your response using proper markdown headings, code blocks, and bullet points. Always before you create new files be sure to evaluate the need for existing code. Think logically and explain the issue before fixing it.
