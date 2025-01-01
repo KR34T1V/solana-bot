@@ -9,16 +9,7 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler",
-    "baseUrl": ".",
-    "paths": {
-      "$lib": ["src/lib"],
-      "$lib/*": ["src/lib/*"],
-      "$tests": ["src/tests"],
-      "$tests/*": ["src/tests/*"],
-      "$env": ["src/env"],
-      "$env/*": ["src/env/*"]
-    }
+    "moduleResolution": "bundler"
   },
   "include": [
     "src/**/*.d.ts",
