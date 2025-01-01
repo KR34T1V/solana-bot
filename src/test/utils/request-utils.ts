@@ -2,19 +2,21 @@ import type { RequestEvent } from '@sveltejs/kit';
 
 type MockRequestEvent<T extends string = string> = RequestEvent<Record<string, string>, T>;
 
-export function createRequestEvent<T extends string = string>(options: {
+export function createRequestEvent<T extends string = "/api/data/historical">(options: {
   method?: string;
   url?: string;
   body?: any;
   headers?: Record<string, string>;
   routeId?: T;
+  locals?: Record<string, any>;
 }): MockRequestEvent<T> {
   const {
     method = 'GET',
     url = 'http://localhost',
     body = null,
     headers = {},
-    routeId = url as T
+    routeId = '/api/data/historical' as T,
+    locals = {}
   } = options;
 
   const request = new Request(url, {
@@ -31,7 +33,7 @@ export function createRequestEvent<T extends string = string>(options: {
     url: new URL(url),
     params: {},
     route: { id: routeId },
-    locals: {},
+    locals,
     platform: {},
     getClientAddress: () => '127.0.0.1',
     cookies: {

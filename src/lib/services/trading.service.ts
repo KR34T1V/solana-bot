@@ -1,36 +1,28 @@
-import { PrismaClient } from '@prisma/client';
-import type { TokenPrice } from '$lib/types/birdeye.types';
-import { mockBirdeyeService as birdeyeService } from '$lib/test/mocks/birdeye-service.mock';
-
-const prisma = new PrismaClient();
-
-export interface CreateStrategyData {
-  name: string;
-  type: string;
-  config: string;
-}
+import { mockBirdeyeService as birdeyeService } from "$test/mocks/birdeye-service.mock";
+import { prisma } from "$lib/server/prisma";
 
 class TradingService {
-  async createStrategy(userId: string, data: CreateStrategyData) {
-    try {
-      return await prisma.strategy.create({
-        data: {
-          ...data,
-          userId
+    async createStrategy(userId: string, data: { name: string; type: string; config: string }) {
+        try {
+            const strategy = await prisma.strategy.create({
+                data: {
+                    ...data,
+                    userId
+                }
+            });
+            return strategy;
+        } catch (error) {
+            throw new Error('Failed to create trading strategy');
         }
-      });
-    } catch (error) {
-      throw new Error('Failed to create trading strategy');
     }
-  }
 
-  async getTokenPrice(tokenAddress: string): Promise<TokenPrice> {
-    try {
-      return await birdeyeService.getTokenPrice(tokenAddress);
-    } catch (error) {
-      throw new Error('Failed to fetch token price');
+    async getTokenPrice(tokenAddress: string) {
+        try {
+            return await birdeyeService.getTokenPrice(tokenAddress);
+        } catch (error) {
+            throw new Error('Failed to fetch token price');
+        }
     }
-  }
 }
 
 export const tradingService = new TradingService(); 

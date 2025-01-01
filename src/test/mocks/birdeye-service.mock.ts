@@ -1,27 +1,25 @@
 import { vi } from 'vitest';
-import type { TokenPrice, TokenMetadata } from '$lib/types/birdeye.types';
+
+export type TokenPrice = {
+  value: number;
+  updateUnixTime: number;
+  updateHour: number;
+};
 
 export const mockBirdeyeService = {
-  getTokenPrice: vi.fn<[string], Promise<TokenPrice>>(),
-  getTokenMetadata: vi.fn<[string], Promise<TokenMetadata>>(),
-  getHistoricalPrices: vi.fn<[string, string, string], Promise<TokenPrice[]>>(),
-  
-  // Helper to setup common mock responses
-  setupMockResponses() {
-    this.getTokenPrice.mockResolvedValue({
+  getTokenPrice: vi.fn().mockImplementation(async (address: string): Promise<TokenPrice> => ({
+    value: 0,
+    updateUnixTime: 0,
+    updateHour: 0
+  })),
+  getHistoricalPrices: vi.fn().mockImplementation(async (address: string, timeframe: string, apiKey: string): Promise<TokenPrice[]> => []),
+  setupMockResponses: () => {
+    mockBirdeyeService.getTokenPrice.mockResolvedValue({
       value: 100.0,
       updateUnixTime: Date.now(),
       updateHour: new Date().getHours()
     });
-
-    this.getTokenMetadata.mockResolvedValue({
-      address: 'mock-token-address',
-      symbol: 'MOCK',
-      name: 'Mock Token',
-      decimals: 9
-    });
-
-    this.getHistoricalPrices.mockResolvedValue([
+    mockBirdeyeService.getHistoricalPrices.mockResolvedValue([
       {
         value: 98.0,
         updateUnixTime: Date.now() - 3600000,
@@ -34,11 +32,8 @@ export const mockBirdeyeService = {
       }
     ]);
   },
-
-  // Reset all mocks to their default state
-  reset() {
-    this.getTokenPrice.mockReset();
-    this.getTokenMetadata.mockReset();
-    this.getHistoricalPrices.mockReset();
+  reset: () => {
+    mockBirdeyeService.getTokenPrice.mockReset();
+    mockBirdeyeService.getHistoricalPrices.mockReset();
   }
 }; 

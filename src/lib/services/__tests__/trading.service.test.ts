@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { prismaMock } from '$lib/test/setup';
-import { createMockUser } from '$lib/test/factories/user.factory';
-import { mockBirdeyeService } from '$lib/test/mocks/birdeye-service.mock';
-import { createMockApiResponse } from '$lib/test/utils/test-utils';
+import { prismaMock } from '$test/setup';
+import { createMockUser } from '$test/factories/user.factory';
+import { mockBirdeyeService } from '$test/mocks/birdeye-service.mock';
 import type { User } from '@prisma/client';
+import { tradingService } from '../trading.service';
 
 describe('TradingService', () => {
   let mockUser: User;
@@ -25,14 +25,16 @@ describe('TradingService', () => {
         })
       };
 
-      prismaMock.strategy.create.mockResolvedValue({
+      const mockStrategy = {
         id: 'mock-strategy-id',
         userId: mockUser.id,
         currentVersion: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...strategyData
-      });
+      };
+
+      prismaMock.strategy.create.mockResolvedValue(mockStrategy);
 
       // Act
       const result = await tradingService.createStrategy(mockUser.id, strategyData);

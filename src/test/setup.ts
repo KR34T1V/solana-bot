@@ -1,7 +1,16 @@
 import { vi, beforeEach } from 'vitest';
-import { PrismaClient } from '@prisma/client';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
-import type { DeepMockProxy } from 'vitest-mock-extended';
+import type { PrismaClient } from '@prisma/client';
+
+vi.mock('@prisma/client', () => ({
+  PrismaClient: vi.fn(() => mockDeep<PrismaClient>())
+}));
+
+beforeEach(() => {
+  mockReset(prismaMock);
+});
+
+export const prismaMock = mockDeep<PrismaClient>();
 
 // Mock environment variables
 vi.mock('$env/static/private', () => ({
@@ -19,21 +28,10 @@ vi.mock('$lib/server/auth', () => ({
   verifyToken: vi.fn()
 }));
 
-// Create Prisma mock
-const prismaMock = mockDeep<PrismaClient>();
-
 // Mock Prisma
 vi.mock('$lib/server/prisma', () => ({
   prisma: prismaMock
 }));
-
-// Reset mocks before each test
-beforeEach(() => {
-  mockReset(prismaMock);
-});
-
-// Export mock instance
-export { prismaMock };
 
 // Mock fetch for API calls
 const mockFetch = vi.fn();

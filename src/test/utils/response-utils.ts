@@ -6,36 +6,24 @@ export interface ApiResponse<T = any> {
   data?: T;
 }
 
-export async function validateSuccessResponse<T>(
-  response: Response,
-  expectedStatus = 200,
-  expectedData?: T
-): Promise<void> {
+export async function validateSuccessResponse(response: Response, expectedStatus: number, expectedData?: any) {
   expect(response.status).toBe(expectedStatus);
-  const data: ApiResponse<T> = await response.json();
-  
+
+  const data = await response.json();
   expect(data.success).toBe(true);
   expect(data.message).toBeDefined();
-  
+
   if (expectedData) {
-    expect(data.data).toEqual(expectedData);
+    expect(data).toEqual(expectedData);
   }
 }
 
-export async function validateErrorResponse(
-  response: Response,
-  expectedStatus: number,
-  expectedMessage?: string
-): Promise<void> {
+export async function validateErrorResponse(response: Response, expectedStatus: number, expectedMessage: string) {
   expect(response.status).toBe(expectedStatus);
-  const data: ApiResponse = await response.json();
-  
+
+  const data = await response.json();
   expect(data.success).toBe(false);
-  expect(data.message).toBeDefined();
-  
-  if (expectedMessage) {
-    expect(data.message).toBe(expectedMessage);
-  }
+  expect(data.message).toBe(expectedMessage);
 }
 
 export function validatePrismaCall(
