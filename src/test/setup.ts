@@ -13,7 +13,9 @@ vi.mock('$env/static/private', () => ({
 vi.mock('$lib/server/auth', () => ({
   hashPassword: vi.fn().mockImplementation(async (password: string) => `hashed_${password}`),
   generateToken: vi.fn().mockImplementation(async (userId: string) => `mocked_token_${userId}`),
-  verifyPassword: vi.fn(),
+  verifyPassword: vi.fn().mockImplementation(async (password: string, hashedPassword: string) => {
+    return hashedPassword === `hashed_${password}`;
+  }),
   verifyToken: vi.fn()
 }));
 

@@ -10,9 +10,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Validate input
     if (!email || !password) {
-      logger.warn('Login attempt with missing credentials', { email });
+      logger.warn('Login attempt with missing credentials', { metadata: { email } });
       return json(
-        { message: 'Email and password are required' },
+        {
+          success: false,
+          message: 'Email and password are required'
+        },
         { status: 400 }
       );
     }
@@ -23,9 +26,12 @@ export const POST: RequestHandler = async ({ request }) => {
     });
 
     if (!user) {
-      logger.warn('Login attempt with non-existent email', { email });
+      logger.warn('Login attempt with non-existent email', { metadata: { email } });
       return json(
-        { message: 'Invalid email or password' },
+        {
+          success: false,
+          message: 'Invalid email or password'
+        },
         { status: 401 }
       );
     }
@@ -33,20 +39,31 @@ export const POST: RequestHandler = async ({ request }) => {
     // Verify password
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
-      logger.warn('Login attempt with invalid password', { email, userId: user.id });
+      logger.warn('Login attempt with invalid password', { metadata: { email, userId: user.id } });
       return json(
-        { message: 'Invalid email or password' },
+        {
+          success: false,
+          message: 'Invalid email or password'
+        },
         { status: 401 }
       );
     }
 
-    // Generate JWT token
+    // Generate token
     const token = await generateToken(user.id);
 
-    logger.info('User logged in successfully', { email, userId: user.id });
+    logger.info('User logged in successfully', { metadata: { email, userId: user.id } });
 
     // Create response with token cookie
-    const response = json({ token });
+    const response = json(
+      {
+        success: true,
+        message: 'Login successful',
+        data: { token }
+      },
+      { status: 200 }
+    );
+
     response.headers.set(
       'Set-Cookie',
       `token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`
@@ -54,9 +71,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
     return response;
   } catch (error) {
-    logError(error as Error, { path: '/api/auth/login' });
+    logError(error as Error, { metadata: { path: '/api/auth/login' } });
     return json(
-      { message: 'An error occurred during login' },
+      {
+        success: false,
+        message: 'An error occurred during login'
+      },
       { status: 500 }
     );
   }
