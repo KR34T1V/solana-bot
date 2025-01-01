@@ -1,6 +1,6 @@
 # Solana Trading Bot
 
-A scalable trading bot platform built with Svelte 5 and SvelteKit, featuring strategy management, backtesting, and real-time trading capabilities.
+A scalable trading bot platform built with Svelte 5 and SvelteKit, featuring automated trading strategies using Birdeye's historical data API.
 
 ## Features
 
@@ -11,28 +11,81 @@ A scalable trading bot platform built with Svelte 5 and SvelteKit, featuring str
 - TypeScript-first codebase
 - Test-driven development
 
+## Database Configuration
+
+The project supports both SQLite and PostgreSQL databases. You can easily switch between them using the provided script.
+
+### Database Setup
+
+1. **SQLite** (Default, no additional setup required)
+   ```bash
+   ./scripts/switch-db.sh sqlite
+   npx prisma generate
+   npx prisma migrate dev
+   ```
+
+2. **PostgreSQL**
+   - Install PostgreSQL if not already installed
+   - Create a database:
+     ```bash
+     createdb solana_bot
+     ```
+   - Switch to PostgreSQL:
+     ```bash
+     ./scripts/switch-db.sh postgres
+     npx prisma generate
+     npx prisma migrate dev
+     ```
+
+### Environment Variables
+
+Create a `.env` file in the root directory:
+
+```env
+# JWT Secret (Required)
+# Run: openssl rand -base64 32
+JWT_SECRET="your-jwt-secret-here"
+
+# Solana Network
+SOLANA_NETWORK="devnet"  # or "mainnet-beta"
+SOLANA_RPC_URL="https://api.devnet.solana.com"
+
+# Database Configuration
+DATABASE_URL="file:./prisma/dev.db"  # For SQLite
+# DATABASE_URL="postgresql://postgres:postgres@localhost:5432/solana_bot?schema=public"  # For PostgreSQL
+
+# Encryption key for API keys (32 bytes)
+# Run: openssl rand -base64 32
+ENCRYPTION_KEY="your-encryption-key-here"
+
+# Birdeye API
+BIRDEYE_API_URL="https://public-api.birdeye.so"
+```
+
 ## Development
 
-```bash
-# Install dependencies
-yarn install
+1. Install dependencies:
+   ```bash
+   yarn install
+   ```
 
-# Start development server
-yarn dev
+2. Initialize the database:
+   ```bash
+   npx prisma migrate dev
+   npx prisma db seed
+   ```
 
-# Build for production
-yarn build
-
-# Preview production build
-yarn preview
-```
+3. Start the development server:
+   ```bash
+   yarn dev
+   ```
 
 ## Testing
 
-The project uses Vitest for unit testing and coverage reporting.
+The project includes comprehensive test coverage:
 
 ```bash
-# Run tests
+# Run all tests
 yarn test
 
 # Run tests with UI
@@ -41,19 +94,9 @@ yarn test:ui
 # Generate coverage report
 yarn test:coverage
 
-# Run end-to-end tests
+# Run E2E tests
 yarn test:e2e
 ```
-
-### Coverage Thresholds
-
-We maintain strict coverage requirements:
-- Statements: 80%
-- Branches: 80%
-- Functions: 80%
-- Lines: 80%
-
-Coverage reports are generated in HTML format and can be viewed by opening `coverage/index.html` in a browser.
 
 ## Project Structure
 
@@ -71,23 +114,14 @@ src/
 └── app.d.ts          # TypeScript declarations
 ```
 
-## Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-DATABASE_URL="your-database-url"
-BIRDEYE_API_KEY="your-birdeye-api-key"
-```
-
 ## Contributing
 
-1. Write tests for new features
-2. Ensure all tests pass
-3. Meet coverage thresholds
-4. Follow TypeScript strict mode
-5. Use Prettier for code formatting
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests
+5. Submit a pull request
 
 ## License
 
-[MIT](LICENSE)
+UNLICENSED
