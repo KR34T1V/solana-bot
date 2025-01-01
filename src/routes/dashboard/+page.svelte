@@ -1,113 +1,121 @@
 <script lang="ts">
-  import type { PageData } from './$types';
-  import { formatDistanceToNow } from 'date-fns';
+  import { PriceChart, TimeRangeSelector, TokenSelector } from '$lib/components/charts';
+  import type { TokenInfo, TimeRange } from '$lib/components/charts/types';
+  import { selectedToken, selectedTimeRange, chartData, recentTokens, isLoading, error } from '$lib/stores/token';
+  import { onMount } from 'svelte';
 
-  export let data: PageData;
+  let searchQuery = '';
+  let searchError: string | undefined;
 
-  const defaultData = {
-    stats: {
-      totalStrategies: 0,
-      activeStrategies: 0,
-      totalBacktests: 0,
-      successfulBacktests: 0,
-      latestStrategies: []
-    },
-    pendingBacktests: []
-  };
+  async function handleSearch(query: string) {
+    if (!query.trim()) return;
+    
+    try {
+      const response = await fetch(`/api/data/search?query=${encodeURIComponent(query)}`);
+      if (!response.ok) {
+        throw new Error('Failed to search tokens');
+      }
+      
+      const data = await response.json();
+      // TODO: Handle search results
+    } catch (err) {
+      searchError = 'Failed to search tokens';
+      console.error('Search error:', err);
+    }
+  }
 
-  $: ({ stats = defaultData.stats, pendingBacktests = defaultData.pendingBacktests } = data);
+  async function handleTokenSelect(token: TokenInfo) {
+    try {
+      isLoading.set(true);
+      const response = await fetch(`/api/data/historical`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: token.address,
+          timeRange: $selectedTimeRange
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch historical data');
+      }
+
+      const data = await response.json();
+      chartData.set({
+        token,
+        prices: data.prices,
+        timeRange: $selectedTimeRange,
+        lastUpdated: Date.now()
+      });
+    } catch (err) {
+      error.set('Failed to fetch historical data');
+      console.error('Data fetch error:', err);
+    } finally {
+      isLoading.set(false);
+    }
+  }
+
+  async function handleTimeRangeSelect(range: TimeRange) {
+    selectedTimeRange.set(range);
+    if ($selectedToken) {
+      await handleTokenSelect($selectedToken);
+    }
+  }
+
+  onMount(async () => {
+    try {
+      const response = await fetch('/api/data/recent-tokens');
+      if (!response.ok) {
+        throw new Error('Failed to fetch recent tokens');
+      }
+      
+      const data = await response.json();
+      recentTokens.set(data.tokens);
+    } catch (err) {
+      console.error('Failed to fetch recent tokens:', err);
+    }
+  });
 </script>
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-8">Dashboard</h1>
+  <div class="grid gap-8">
+    <div class="space-y-4">
+      <h1 class="text-2xl font-bold">Token Price Charts</h1>
+      
+      <div class="grid gap-4 md:grid-cols-[2fr,1fr]">
+        <TokenSelector
+          selectedToken={$selectedToken}
+          recentTokens={$recentTokens}
+          loading={$isLoading}
+          error={searchError}
+          on:search={e => handleSearch(e.detail)}
+          on:select={e => handleTokenSelect(e.detail)}
+        />
+        
+        <TimeRangeSelector
+          value={$selectedTimeRange}
+          disabled={$isLoading || !$selectedToken}
+          on:select={e => handleTimeRangeSelect(e.detail)}
+        />
+      </div>
+    </div>
 
-  <!-- Stats Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 class="text-lg font-semibold text-gray-600">Total Strategies</h3>
-      <p class="text-3xl font-bold">{stats.totalStrategies}</p>
-    </div>
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 class="text-lg font-semibold text-gray-600">Active Strategies</h3>
-      <p class="text-3xl font-bold">{stats.activeStrategies}</p>
-    </div>
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 class="text-lg font-semibold text-gray-600">Total Backtests</h3>
-      <p class="text-3xl font-bold">{stats.totalBacktests}</p>
-    </div>
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 class="text-lg font-semibold text-gray-600">Successful Backtests</h3>
-      <p class="text-3xl font-bold">{stats.successfulBacktests}</p>
-    </div>
+    {#if $error}
+      <div class="bg-red-50 border border-red-200 rounded-md p-4 text-red-700">
+        {$error}
+      </div>
+    {/if}
+
+    {#if $chartData}
+      <PriceChart
+        data={$chartData}
+        options={{
+          timeRange: $selectedTimeRange,
+          showGrid: true,
+          height: 400,
+          tooltips: true
+        }}
+      />
+    {/if}
   </div>
-
-  <!-- Pending Backtests -->
-  {#if pendingBacktests.length > 0}
-    <div class="bg-white rounded-lg shadow p-6 mb-8">
-      <h2 class="text-xl font-bold mb-4">Pending Backtests</h2>
-      <div class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Strategy</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            {#each pendingBacktests as backtest}
-              <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {backtest.strategy?.name ?? 'Unknown Strategy'}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDistanceToNow(new Date(backtest.createdAt), { addSuffix: true })}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                    Running
-                  </span>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  {/if}
-
-  <!-- Latest Strategies -->
-  {#if stats.latestStrategies?.length > 0}
-    <div class="bg-white rounded-lg shadow p-6">
-      <h2 class="text-xl font-bold mb-4">Latest Strategies</h2>
-      <div class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Backtests</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Versions</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            {#each stats.latestStrategies as strategy}
-              <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  <a href="/strategy/{strategy.id}" class="text-blue-600 hover:text-blue-900">{strategy.name}</a>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{strategy.type}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDistanceToNow(new Date(strategy.createdAt), { addSuffix: true })}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{strategy.backtestCount}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{strategy.versions}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  {/if}
 </div> 
