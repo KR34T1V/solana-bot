@@ -13,7 +13,8 @@ global.fetch = mockFetch;
 vi.mock('$lib/server/logger', () => ({
     logger: {
         error: vi.fn(),
-        info: vi.fn()
+        info: vi.fn(),
+        warn: vi.fn()
     }
 }));
 
@@ -57,14 +58,14 @@ class MockResponse implements Response {
 
     async json(): Promise<any> {
         if (!this.ok) {
-            throw new Error(`HTTP error! status: ${this.status}`);
+            throw new Error(this.statusText);
         }
         return Promise.resolve(this.responseData);
     }
 
     async text(): Promise<string> {
         if (!this.ok) {
-            throw new Error(`HTTP error! status: ${this.status}`);
+            throw new Error(this.statusText);
         }
         return Promise.resolve(JSON.stringify(this.responseData));
     }
@@ -81,6 +82,118 @@ class MockResponse implements Response {
 // Helper to create mock responses
 export const createMockResponse = (data: any, init: ResponseInit = {}): MockResponse => {
     return new MockResponse(data, init);
+};
+
+// Provider-specific mock responses
+export const mockProviderResponses = {
+    auth: {
+        success: { success: true },
+        error: { success: false, error: 'Invalid API key' }
+    },
+    birdeye: {
+        price: {
+            success: {
+                value: 1.23,
+                updateUnixTime: 1234567890,
+                updateTime: '2024-01-01T00:00:00Z'
+            },
+            error: {
+                error: 'Token price not found',
+                status: 404
+            }
+        },
+        ohlcv: {
+            success: [{
+                unixTime: 1234567890,
+                time: '2024-01-01T00:00:00Z',
+                open: 1.0,
+                high: 1.5,
+                low: 0.5,
+                close: 1.2,
+                volume: 1000
+            }],
+            error: {
+                error: 'Invalid OHLCV parameters',
+                status: 400
+            }
+        },
+        orderBook: {
+            success: {
+                asks: [{ price: 1.1, size: 100 }],
+                bids: [{ price: 0.9, size: 100 }],
+                updateUnixTime: 1234567890
+            },
+            error: {
+                error: 'Order book service unavailable',
+                status: 503
+            }
+        },
+        tokenSearch: {
+            success: [{
+                address: 'token-address',
+                chainId: 1,
+                decimals: 18,
+                name: 'Test Token',
+                symbol: 'TEST',
+                logoURI: 'https://test.com/logo.png'
+            }],
+            error: {
+                error: 'Token search service unavailable',
+                status: 502
+            }
+        }
+    },
+    jupiter: {
+        price: {
+            success: {
+                price: 1.23,
+                timestamp: 1234567890000
+            },
+            error: {
+                error: 'Token price not found',
+                status: 404
+            }
+        },
+        ohlcv: {
+            success: [{
+                timestamp: 1234567890000,
+                open: 1.0,
+                high: 1.5,
+                low: 0.5,
+                close: 1.2,
+                volume: 1000
+            }],
+            error: {
+                error: 'Invalid OHLCV parameters',
+                status: 400
+            }
+        },
+        orderBook: {
+            success: {
+                asks: [{ price: 1.1, size: 100 }],
+                bids: [{ price: 0.9, size: 100 }],
+                timestamp: 1234567890000
+            },
+            error: {
+                error: 'Order book service unavailable',
+                status: 503
+            }
+        },
+        tokenSearch: {
+            success: [{
+                address: 'token-address',
+                chainId: 1,
+                decimals: 18,
+                name: 'Test Token',
+                symbol: 'TEST',
+                logoURI: 'https://test.com/logo.png'
+            }],
+            error: {
+                error: 'Token search service unavailable',
+                status: 502
+            }
+        }
+    }
 };
 
 // Reset all mocks before each test

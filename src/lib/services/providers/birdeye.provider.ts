@@ -9,6 +9,7 @@ import type {
 import type { TokenInfo } from '$lib/types/token.types';
 import { logger } from '$lib/server/logger';
 import { fetchWithRetry } from '$lib/utils/fetch';
+import { ProviderError, ProviderErrorType } from './__tests__/factory';
 
 interface BirdeyeTokenPrice {
     value: number;
@@ -101,23 +102,19 @@ export class BirdeyeProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                const error = new Error('Invalid API key');
-                error.name = 'InvalidApiKeyError';
-                throw error;
+                throw ProviderError.fromHttpStatus(response.status, 'Invalid API key', this.name);
             }
 
             const data = await response.json();
             if (!data.success) {
-                const error = new Error('Invalid API key');
-                error.name = 'InvalidApiKeyError';
-                throw error;
+                throw new ProviderError(ProviderErrorType.Unauthorized, 'Invalid API key', this.name);
             }
         } catch (error) {
             logger.error('Failed to verify BirdEye API key:', error);
-            if (error instanceof Error && error.name === 'InvalidApiKeyError') {
+            if (error instanceof ProviderError) {
                 throw error;
             }
-            throw new Error('Invalid API key');
+            throw new ProviderError(ProviderErrorType.Unauthorized, 'Invalid API key', this.name);
         }
     }
 
@@ -152,7 +149,7 @@ export class BirdeyeProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Not Found');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data: BirdeyeTokenPrice = await response.json();
@@ -167,10 +164,9 @@ export class BirdeyeProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to fetch BirdEye price:', error);
             if (error instanceof Error) {
-                const message = error.message.includes('HTTP error!') ? 'Not Found' : error.message;
-                throw new Error(`Failed to fetch price: ${message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to fetch price: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 
@@ -198,7 +194,7 @@ export class BirdeyeProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Bad Request');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data: BirdeyeOHLCV[] = await response.json();
@@ -219,10 +215,9 @@ export class BirdeyeProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to fetch BirdEye OHLCV:', error);
             if (error instanceof Error) {
-                const message = error.message.includes('HTTP error!') ? 'Bad Request' : error.message;
-                throw new Error(`Failed to fetch OHLCV: ${message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to fetch OHLCV: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 
@@ -248,12 +243,12 @@ export class BirdeyeProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Service Unavailable');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data = await response.json();
             if (!data || !data.asks || !data.bids) {
-                throw new Error('Service Unavailable');
+                throw new ProviderError(ProviderErrorType.ServiceUnavailable, 'Invalid order book data', this.name);
             }
 
             const orderBook: OrderBookData = {
@@ -268,9 +263,9 @@ export class BirdeyeProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to fetch BirdEye order book:', error);
             if (error instanceof Error) {
-                throw new Error(`Failed to fetch order book: ${error.message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to fetch order book: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 
@@ -293,12 +288,12 @@ export class BirdeyeProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Bad Gateway');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data = await response.json();
             if (!Array.isArray(data)) {
-                throw new Error('Bad Gateway');
+                throw new ProviderError(ProviderErrorType.BadGateway, 'Invalid token data', this.name);
             }
 
             const tokens: TokenInfo[] = data.map(token => ({
@@ -315,9 +310,9 @@ export class BirdeyeProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to search BirdEye tokens:', error);
             if (error instanceof Error) {
-                throw new Error(`Failed to search tokens: ${error.message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to search tokens: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 } 

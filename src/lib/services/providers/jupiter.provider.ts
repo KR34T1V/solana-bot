@@ -9,18 +9,15 @@ import type {
 import type { TokenInfo } from '$lib/types/token.types';
 import { logger } from '$lib/server/logger';
 import { fetchWithRetry } from '$lib/utils/fetch';
+import { ProviderError, ProviderErrorType } from './__tests__/factory';
 
 interface JupiterTokenPrice {
-    id: string;
-    mintSymbol: string;
-    vsToken: string;
-    vsTokenSymbol: string;
     price: number;
     timestamp: number;
 }
 
 interface JupiterOHLCV {
-    time: number;
+    timestamp: number;
     open: number;
     high: number;
     low: number;
@@ -29,8 +26,6 @@ interface JupiterOHLCV {
 }
 
 interface JupiterOrderBook {
-    market: string;
-    timestamp: number;
     asks: Array<{
         price: number;
         size: number;
@@ -39,6 +34,7 @@ interface JupiterOrderBook {
         price: number;
         size: number;
     }>;
+    timestamp: number;
 }
 
 interface JupiterToken {
@@ -49,9 +45,6 @@ interface JupiterToken {
     symbol: string;
     logoURI?: string;
     tags?: string[];
-    extensions?: {
-        coingeckoId?: string;
-    };
 }
 
 export class JupiterProvider implements MarketDataProvider {
@@ -64,7 +57,7 @@ export class JupiterProvider implements MarketDataProvider {
 
     constructor(
         config: ProviderConfig,
-        priority: number = 1
+        priority: number = 2
     ) {
         this.baseUrl = config.baseUrl;
         this.apiKey = config.apiKey;
@@ -72,8 +65,8 @@ export class JupiterProvider implements MarketDataProvider {
     }
 
     async initialize(): Promise<void> {
-        // Verify API key and connection
-        await this.verifyConnection();
+        // Verify API key on initialization
+        await this.verifyApiKey();
     }
 
     async validateConfig(): Promise<boolean> {
@@ -86,7 +79,7 @@ export class JupiterProvider implements MarketDataProvider {
 
     async healthCheck(): Promise<boolean> {
         try {
-            await this.verifyConnection();
+            await this.verifyApiKey();
             return true;
         } catch (error) {
             logger.error('Jupiter health check failed:', error);
@@ -94,35 +87,31 @@ export class JupiterProvider implements MarketDataProvider {
         }
     }
 
-    private async verifyConnection(): Promise<void> {
+    private async verifyApiKey(): Promise<void> {
         try {
             const response = await fetchWithRetry(
-                `${this.baseUrl}/v4/health`,
+                `${this.baseUrl}/api/v1/auth/verify`,
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.apiKey}`
+                        'X-API-KEY': this.apiKey
                     }
                 }
             );
 
             if (!response.ok) {
-                const error = new Error('Failed to connect to Jupiter API');
-                error.name = 'ConnectionError';
-                throw error;
+                throw ProviderError.fromHttpStatus(response.status, 'Invalid API key', this.name);
             }
 
             const data = await response.json();
-            if (data.status !== 'ok') {
-                const error = new Error('Failed to connect to Jupiter API');
-                error.name = 'ConnectionError';
-                throw error;
+            if (!data.success) {
+                throw new ProviderError(ProviderErrorType.Unauthorized, 'Invalid API key', this.name);
             }
         } catch (error) {
-            logger.error('Failed to verify Jupiter connection:', error);
-            if (error instanceof Error && error.name === 'ConnectionError') {
+            logger.error('Failed to verify Jupiter API key:', error);
+            if (error instanceof ProviderError) {
                 throw error;
             }
-            throw new Error('Failed to connect to Jupiter API');
+            throw new ProviderError(ProviderErrorType.Unauthorized, 'Invalid API key', this.name);
         }
     }
 
@@ -148,16 +137,16 @@ export class JupiterProvider implements MarketDataProvider {
 
         try {
             const response = await fetchWithRetry(
-                `${this.baseUrl}/v4/price/${tokenAddress}`,
+                `${this.baseUrl}/api/v1/token/price/${tokenAddress}`,
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.apiKey}`
+                        'X-API-KEY': this.apiKey
                     }
                 }
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Not Found');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data: JupiterTokenPrice = await response.json();
@@ -172,10 +161,9 @@ export class JupiterProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to fetch Jupiter price:', error);
             if (error instanceof Error) {
-                const message = error.message.includes('HTTP error!') ? 'Not Found' : error.message;
-                throw new Error(`Failed to fetch price: ${message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to fetch price: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 
@@ -190,10 +178,10 @@ export class JupiterProvider implements MarketDataProvider {
 
         try {
             const response = await fetchWithRetry(
-                `${this.baseUrl}/v4/candles/${tokenAddress}`,
+                `${this.baseUrl}/api/v1/token/ohlcv/${tokenAddress}`,
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.apiKey}`
+                        'X-API-KEY': this.apiKey
                     },
                     params: {
                         interval: timeFrame,
@@ -203,13 +191,13 @@ export class JupiterProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Bad Request');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data: JupiterOHLCV[] = await response.json();
             const ohlcv: OHLCVData = {
                 data: data.map(candle => ({
-                    timestamp: candle.time,
+                    timestamp: candle.timestamp,
                     open: candle.open,
                     high: candle.high,
                     low: candle.low,
@@ -224,10 +212,9 @@ export class JupiterProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to fetch Jupiter OHLCV:', error);
             if (error instanceof Error) {
-                const message = error.message.includes('HTTP error!') ? 'Bad Request' : error.message;
-                throw new Error(`Failed to fetch OHLCV: ${message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to fetch OHLCV: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 
@@ -241,10 +228,10 @@ export class JupiterProvider implements MarketDataProvider {
 
         try {
             const response = await fetchWithRetry(
-                `${this.baseUrl}/v4/orderbook/${tokenAddress}`,
+                `${this.baseUrl}/api/v1/token/orderbook/${tokenAddress}`,
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.apiKey}`
+                        'X-API-KEY': this.apiKey
                     },
                     params: {
                         depth: depth.toString()
@@ -253,12 +240,12 @@ export class JupiterProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Service Unavailable');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data = await response.json();
             if (!data || !data.asks || !data.bids) {
-                throw new Error('Service Unavailable');
+                throw new ProviderError(ProviderErrorType.ServiceUnavailable, 'Invalid order book data', this.name);
             }
 
             const orderBook: OrderBookData = {
@@ -273,9 +260,9 @@ export class JupiterProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to fetch Jupiter order book:', error);
             if (error instanceof Error) {
-                throw new Error(`Failed to fetch order book: ${error.message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to fetch order book: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 
@@ -286,10 +273,10 @@ export class JupiterProvider implements MarketDataProvider {
 
         try {
             const response = await fetchWithRetry(
-                `${this.baseUrl}/v4/tokens/search`,
+                `${this.baseUrl}/api/v1/token/search`,
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.apiKey}`
+                        'X-API-KEY': this.apiKey
                     },
                     params: {
                         query
@@ -298,12 +285,12 @@ export class JupiterProvider implements MarketDataProvider {
             );
 
             if (!response.ok) {
-                throw new Error(response.statusText || 'Bad Gateway');
+                throw ProviderError.fromHttpStatus(response.status, undefined, this.name);
             }
 
             const data = await response.json();
             if (!Array.isArray(data)) {
-                throw new Error('Bad Gateway');
+                throw new ProviderError(ProviderErrorType.BadGateway, 'Invalid token data', this.name);
             }
 
             const tokens: TokenInfo[] = data.map(token => ({
@@ -320,9 +307,9 @@ export class JupiterProvider implements MarketDataProvider {
         } catch (error) {
             logger.error('Failed to search Jupiter tokens:', error);
             if (error instanceof Error) {
-                throw new Error(`Failed to search tokens: ${error.message}`);
+                throw ProviderError.fromError(error, this.name);
             }
-            throw new Error('Failed to search tokens: Unknown error');
+            throw new ProviderError(ProviderErrorType.Unknown, 'Unknown error', this.name);
         }
     }
 } 
