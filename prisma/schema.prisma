@@ -1,185 +1,33 @@
+// This is your Prisma schema file
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
 model User {
-  id         String       @id @default(cuid())
-  email      String       @unique
-  password   String
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  apiKeys    ApiKey[]
-  strategies Strategy[]
-  bots       TradingBot[]
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  loginAttempts Int       @default(0)
+  lockedUntil   DateTime?
+
+  @@map("users")
 }
 
-model Strategy {
-  id             String            @id @default(cuid())
-  name           String
-  type           String
-  config         String
-  currentVersion Int               @default(1)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  userId         String
-  backtests      Backtest[]
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  versions       StrategyVersion[]
-  bots           TradingBot[]
-
-  @@index([userId])
-}
-
-model StrategyVersion {
-  id              String    @id @default(cuid())
-  version         Int
-  name            String
-  type            String
-  config          String
-  changes         String
-  createdAt       DateTime  @default(now())
-  performance     String?
-  backtestResults String?
-  lastTestedAt    DateTime?
-  strategyId      String
-  strategy        Strategy  @relation(fields: [strategyId], references: [id], onDelete: Cascade)
-
-  @@unique([strategyId, version])
-}
-
-model Backtest {
-  id         String   @id @default(cuid())
-  startDate  DateTime
-  endDate    DateTime
-  pair       String
-  timeframe  String
-  config     String
-  results    String
-  status     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  strategyId String
-  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
-
-  @@index([strategyId])
-}
-
-model HistoricalPrice {
-  id        String   @id @default(cuid())
-  pair      String
-  timestamp DateTime
-  open      Float
-  high      Float
-  low       Float
-  close     Float
-  volume    Float
-  source    String
-  timeframe String
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([pair, timestamp, timeframe])
-  @@index([pair, timestamp])
-  @@index([timeframe])
-}
-
-model TradingBot {
-  id          String         @id @default(cuid())
-  name        String
-  status      String
-  config      String
-  lastTradeAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  userId      String
-  strategyId  String
-  trades      Trade[]
-  strategy    Strategy       @relation(fields: [strategyId], references: [id])
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet      VirtualWallet?
-
-  @@index([userId])
-  @@index([strategyId])
-}
-
-model VirtualWallet {
-  id             String        @id @default(cuid())
-  balance        Float         @default(0)
-  totalDeposits  Float         @default(0)
-  totalWithdraws Float         @default(0)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  botId          String        @unique
-  positions      Position[]
-  transactions   Transaction[]
-  bot            TradingBot    @relation(fields: [botId], references: [id], onDelete: Cascade)
-}
-
-model Position {
-  id           String        @id @default(cuid())
-  pair         String
-  side         String
-  size         Float
-  entryPrice   Float
-  currentPrice Float?
-  pnl          Float?
-  status       String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  closedAt     DateTime?
-  walletId     String
-  wallet       VirtualWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
-  @@index([walletId])
-}
-
-model Trade {
-  id         String     @id @default(cuid())
-  pair       String
-  side       String
-  type       String
-  amount     Float
-  price      Float
-  status     String
-  createdAt  DateTime   @default(now())
-  executedAt DateTime?
-  botId      String
-  bot        TradingBot @relation(fields: [botId], references: [id], onDelete: Cascade)
-
-  @@index([botId])
-}
-
-model Transaction {
-  id        String        @id @default(cuid())
-  type      String
-  amount    Float
-  currency  String
-  status    String
-  metadata  String?
-  createdAt DateTime      @default(now())
-  walletId  String
-  wallet    VirtualWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
-  @@index([walletId])
-}
-
-model ApiKey {
-  id          String   @id @default(cuid())
-  userId      String
-  provider    String
-  name        String
-  key         String
-  isActive    Boolean  @default(true)
-  lastVerified DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, provider])
-  @@index([provider])
+  @@map("sessions")
 } 
