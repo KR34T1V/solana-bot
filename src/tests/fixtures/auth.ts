@@ -30,10 +30,13 @@ export const invalidRegistrationData: Partial<RegistrationData>[] = [
   },
 ];
 
-export const mockUser: Omit<User, "id" | "createdAt" | "updatedAt"> = {
+export const mockUser = {
+  id: "mock-user-id",
   email: "test@example.com",
   password: "$2a$10$mockhashedpassword",
   lastLoginAt: null,
   loginAttempts: 0,
   lockedUntil: null,
-};
+  createdAt: new Date(),
+  updatedAt: new Date(),
+} satisfies User;
