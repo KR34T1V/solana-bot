@@ -25,12 +25,6 @@
     selectedToken = token;
     dispatch('select', token);
   }
-
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      handleSearch();
-    }
-  }
 </script>
 
 <div class="space-y-4">
@@ -42,7 +36,7 @@
       {error}
       disabled={loading}
       className="flex-1"
-      on:keydown={handleKeydown}
+      on:input={() => handleSearch()}
     />
   </div>
 
