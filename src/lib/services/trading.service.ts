@@ -1,28 +1,24 @@
-import { mockBirdeyeService as birdeyeService } from "$test/mocks/birdeye-service.mock";
-import { prisma } from "$lib/server/prisma";
+import { logger } from '$lib/server/logger';
+import { JupiterService } from './jupiter.service';
 
-class TradingService {
-    async createStrategy(userId: string, data: { name: string; type: string; config: string }) {
-        try {
-            const strategy = await prisma.strategy.create({
-                data: {
-                    ...data,
-                    userId
-                }
-            });
-            return strategy;
-        } catch (error) {
-            throw new Error('Failed to create trading strategy');
-        }
+export class TradingService {
+    private jupiterService: JupiterService;
+
+    constructor() {
+        this.jupiterService = new JupiterService();
     }
 
+    /**
+     * Get current token price
+     * @param tokenAddress Token address
+     * @returns Current price data
+     */
     async getTokenPrice(tokenAddress: string) {
         try {
-            return await birdeyeService.getTokenPrice(tokenAddress);
+            return await this.jupiterService.getTokenPrice(tokenAddress);
         } catch (error) {
-            throw new Error('Failed to fetch token price');
+            logger.error('Failed to get token price:', { error, tokenAddress });
+            throw error instanceof Error ? error : new Error('Failed to get token price');
         }
     }
-}
-
-export const tradingService = new TradingService(); 
+} 
