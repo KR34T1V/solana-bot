@@ -1,74 +1,105 @@
 /**
  * @file Counter Service Tests
  * @version 1.0.0
- * @description Test suite for the CounterService
+ * @description Test suite for counter service implementation
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CounterService } from "../counter.service";
-import { BaseServiceTest } from "../../__tests__/base-service.test";
 import { ServiceStatus } from "../../core/service.manager";
 
-class CounterServiceTest extends BaseServiceTest {
-  protected createService(): CounterService {
-    return new CounterService({ initialValue: 0, maxValue: 10 });
-  }
+describe("CounterService", () => {
+  let service: CounterService;
 
-  public beforeAll(): void {
-    super.beforeAll();
-
-    describe("Counter Service Specific Tests", () => {
-      let counterService: CounterService;
-
-      beforeEach(() => {
-        counterService = this.createService();
-      });
-
-      it("should initialize with correct values", async () => {
-        await counterService.start();
-        expect(counterService.getValue()).toBe(0);
-      });
-
-      it("should increment counter", async () => {
-        await counterService.start();
-        expect(counterService.increment()).toBe(1);
-        expect(counterService.getValue()).toBe(1);
-      });
-
-      it("should reset counter", async () => {
-        await counterService.start();
-        counterService.increment();
-        counterService.increment();
-        counterService.reset();
-        expect(counterService.getValue()).toBe(0);
-      });
-
-      it("should not exceed max value", async () => {
-        await counterService.start();
-        for (let i = 0; i < 10; i++) {
-          counterService.increment();
-        }
-        expect(() => counterService.increment()).toThrow();
-        expect(counterService.getStatus()).toBe(ServiceStatus.ERROR);
-      });
-
-      it("should not allow operations when not running", () => {
-        expect(() => counterService.getValue()).toThrow();
-        expect(() => counterService.increment()).toThrow();
-        expect(() => counterService.reset()).toThrow();
-      });
-
-      it("should validate initial value against max value", async () => {
-        const invalidService = new CounterService({
-          initialValue: 20,
-          maxValue: 10,
-        });
-        await expect(invalidService.start()).rejects.toThrow();
-        expect(invalidService.getStatus()).toBe(ServiceStatus.ERROR);
-      });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new CounterService({
+      initialValue: 0,
+      maxValue: 100,
     });
-  }
-}
+  });
 
-// Create an instance and run the tests
-new CounterServiceTest().beforeAll();
+  describe("Service Lifecycle", () => {
+    it("should start correctly", async () => {
+      expect(service.getStatus()).toBe(ServiceStatus.PENDING);
+      await service.start();
+      expect(service.getStatus()).toBe(ServiceStatus.RUNNING);
+    });
+
+    it("should stop correctly", async () => {
+      await service.start();
+      await service.stop();
+      expect(service.getStatus()).toBe(ServiceStatus.STOPPED);
+    });
+
+    it("should prevent double start", async () => {
+      await service.start();
+      await expect(service.start()).rejects.toThrow("already running");
+    });
+
+    it("should prevent double stop", async () => {
+      await service.start();
+      await service.stop();
+      await expect(service.stop()).rejects.toThrow("already stopped");
+    });
+  });
+
+  describe("Counter Operations", () => {
+    beforeEach(async () => {
+      await service.start();
+    });
+
+    it("should initialize with correct value", () => {
+      expect(service.getValue()).toBe(0);
+    });
+
+    it("should increment value", () => {
+      service.increment();
+      expect(service.getValue()).toBe(1);
+    });
+
+    it("should not exceed max value", () => {
+      for (let i = 0; i < 100; i++) {
+        service.increment();
+      }
+      expect(() => service.increment()).toThrow(
+        "Counter exceeded maximum value",
+      );
+      expect(service.getValue()).toBe(100);
+    });
+
+    it("should reset value", () => {
+      service.increment();
+      service.reset();
+      expect(service.getValue()).toBe(0);
+    });
+
+    it("should not allow operations when stopped", async () => {
+      await service.stop();
+      expect(() => service.increment()).toThrow("not running");
+      expect(() => service.reset()).toThrow("not running");
+    });
+  });
+
+  describe("Configuration", () => {
+    it("should validate initial value", () => {
+      expect(
+        () =>
+          new CounterService({
+            initialValue: 200,
+            maxValue: 100,
+          }),
+      ).toThrow("Initial value must be between min and max");
+    });
+
+    it("should validate min/max values", () => {
+      expect(
+        () =>
+          new CounterService({
+            initialValue: 0,
+            maxValue: 0,
+          }),
+      ).toThrow("Min value must be less than max value");
+    });
+  });
+});

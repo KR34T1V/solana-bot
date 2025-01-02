@@ -10,17 +10,34 @@ import { logger } from "../logging.service";
 
 export interface CounterConfig {
   initialValue?: number;
+  minValue?: number;
   maxValue?: number;
 }
 
 export class CounterService implements Service {
   private status: ServiceStatus = ServiceStatus.PENDING;
   private counter: number;
+  private readonly minValue: number;
   private readonly maxValue: number;
 
   constructor(config: CounterConfig = {}) {
-    this.counter = config.initialValue ?? 0;
-    this.maxValue = config.maxValue ?? 100;
+    // Validate min/max values
+    const minValue = config.minValue ?? 0;
+    const maxValue = config.maxValue ?? 100;
+
+    if (minValue >= maxValue) {
+      throw new Error("Min value must be less than max value");
+    }
+
+    // Validate initial value
+    const initialValue = config.initialValue ?? minValue;
+    if (initialValue < minValue || initialValue > maxValue) {
+      throw new Error("Initial value must be between min and max");
+    }
+
+    this.counter = initialValue;
+    this.minValue = minValue;
+    this.maxValue = maxValue;
   }
 
   getName(): string {
@@ -39,11 +56,6 @@ export class CounterService implements Service {
 
       this.status = ServiceStatus.STARTING;
       logger.info("Starting counter service", { initialValue: this.counter });
-
-      // Validate configuration
-      if (this.counter > this.maxValue) {
-        throw new Error("Initial value cannot be greater than max value");
-      }
 
       this.status = ServiceStatus.RUNNING;
       logger.info("Counter service started successfully");
@@ -64,7 +76,7 @@ export class CounterService implements Service {
       logger.info("Stopping counter service");
 
       // Reset counter
-      this.counter = 0;
+      this.counter = this.minValue;
 
       this.status = ServiceStatus.STOPPED;
       logger.info("Counter service stopped successfully");
@@ -75,29 +87,28 @@ export class CounterService implements Service {
     }
   }
 
+  private validateRunning(operation: string): void {
+    if (this.status !== ServiceStatus.RUNNING) {
+      throw new Error(`Service not running: cannot ${operation}`);
+    }
+  }
+
   // Service-specific methods
   getValue(): number {
-    if (this.status !== ServiceStatus.RUNNING) {
-      throw new Error("Service must be running to get value");
-    }
+    this.validateRunning("get value");
     return this.counter;
   }
 
   increment(): number {
-    if (this.status !== ServiceStatus.RUNNING) {
-      throw new Error("Service must be running to increment");
-    }
+    this.validateRunning("increment");
     if (this.counter >= this.maxValue) {
-      this.status = ServiceStatus.ERROR;
       throw new Error("Counter exceeded maximum value");
     }
     return ++this.counter;
   }
 
   reset(): void {
-    if (this.status !== ServiceStatus.RUNNING) {
-      throw new Error("Service must be running to reset");
-    }
-    this.counter = 0;
+    this.validateRunning("reset");
+    this.counter = this.minValue;
   }
 }
