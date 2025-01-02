@@ -228,4 +228,131 @@ describe("RaydiumProvider", () => {
       expect(liquidityResult).toBeNull();
     });
   });
+
+  describe("getPoolKeys", () => {
+    it("should return V3 pool keys", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        lpMint: "LP_MINT",
+        baseDecimals: 9,
+        quoteDecimals: 6,
+        version: 3,
+      };
+
+      const mockV3PoolData = {
+        programId: "PROGRAM_ID",
+        authority: "AUTHORITY",
+        lpDecimals: 9,
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ data: [mockPool] })
+          .mockResolvedValueOnce({ data: mockV3PoolData }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getPrice(mockTokenMint);
+      expect(result).toBeDefined();
+      expect(result.price).toBeGreaterThan(0);
+    });
+
+    it("should return V2 pool keys", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        lpMint: "LP_MINT",
+        baseDecimals: 9,
+        quoteDecimals: 6,
+        version: 2,
+        ammId: "AMM_ID",
+        marketId: "MARKET_ID",
+      };
+
+      const mockV2PoolData = {
+        programId: "PROGRAM_ID",
+        authority: "AUTHORITY",
+        lpDecimals: 9,
+        openOrders: "OPEN_ORDERS",
+        targetOrders: "TARGET_ORDERS",
+        baseVault: "BASE_VAULT",
+        quoteVault: "QUOTE_VAULT",
+        withdrawQueue: "WITHDRAW_QUEUE",
+        lpVault: "LP_VAULT",
+        marketProgramId: "MARKET_PROGRAM_ID",
+        marketAuthority: "MARKET_AUTHORITY",
+        marketBaseVault: "MARKET_BASE_VAULT",
+        marketQuoteVault: "MARKET_QUOTE_VAULT",
+        marketBids: "MARKET_BIDS",
+        marketAsks: "MARKET_ASKS",
+        marketEventQueue: "MARKET_EVENT_QUEUE",
+        lookupTableAccount: "LOOKUP_TABLE_ACCOUNT",
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ data: [mockPool] })
+          .mockResolvedValueOnce({ data: mockV2PoolData }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getPrice(mockTokenMint);
+      expect(result).toBeDefined();
+      expect(result.price).toBeGreaterThan(0);
+    });
+
+    it("should throw error when V2 pool is missing required data", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        lpMint: "LP_MINT",
+        baseDecimals: 9,
+        quoteDecimals: 6,
+        version: 2, // V2 pool without ammId and marketId
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi.fn().mockResolvedValue({ data: [mockPool] }),
+      } as unknown as AxiosInstance);
+
+      await expect(provider.getPrice(mockTokenMint)).rejects.toThrow(
+        /Missing required V2 pool data/,
+      );
+    });
+
+    it("should throw error when V2 pool is missing lookupTableAccount", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        lpMint: "LP_MINT",
+        baseDecimals: 9,
+        quoteDecimals: 6,
+        version: 2,
+        ammId: "AMM_ID",
+        marketId: "MARKET_ID",
+      };
+
+      const mockV2PoolData = {
+        programId: "PROGRAM_ID",
+        authority: "AUTHORITY",
+        // Missing lookupTableAccount
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ data: [mockPool] })
+          .mockResolvedValueOnce({ data: mockV2PoolData }),
+      } as unknown as AxiosInstance);
+
+      await expect(provider.getPrice(mockTokenMint)).rejects.toThrow(
+        /Missing lookupTableAccount/,
+      );
+    });
+  });
 });

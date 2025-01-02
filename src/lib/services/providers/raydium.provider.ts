@@ -304,22 +304,122 @@ export class RaydiumProvider implements BaseProvider {
     }
   }
 
-  private async getPoolKeys(_pool: RaydiumPool): Promise<LiquidityPoolKeys> {
-    // Implement pool keys retrieval based on pool version
-    // This is a placeholder - implement actual logic
-    return {} as LiquidityPoolKeys;
+  private async getPoolKeys(pool: RaydiumPool): Promise<LiquidityPoolKeys> {
+    try {
+      if (pool.version === 3) {
+        // V3 pool keys
+        const response = await this.apiClient.get(
+          `${API_V2_BASE}/ammV3/pool/${pool.id}`,
+        );
+        const poolData = response.data;
+
+        // For V3 pools, we only need the basic pool information
+        return {
+          id: new PublicKey(pool.id),
+          baseMint: new PublicKey(pool.baseMint),
+          quoteMint: new PublicKey(pool.quoteMint),
+          lpMint: new PublicKey(pool.lpMint),
+          baseDecimals: pool.baseDecimals,
+          quoteDecimals: pool.quoteDecimals,
+          lpDecimals: poolData.lpDecimals,
+          version: 5, // Version 5 corresponds to V3 pools in the SDK
+          programId: new PublicKey(poolData.programId),
+          authority: new PublicKey(poolData.authority),
+        } as LiquidityPoolKeys;
+      } else {
+        // V2 pool keys
+        if (!pool.ammId || !pool.marketId) {
+          throw new Error(`Missing required V2 pool data for pool: ${pool.id}`);
+        }
+
+        // Fetch additional V2 pool data if needed
+        const response = await this.apiClient.get(
+          `${API_V2_BASE}/main/pool/${pool.id}`,
+        );
+        const poolData = response.data;
+
+        // Ensure lookupTableAccount is available
+        if (!poolData.lookupTableAccount) {
+          throw new Error(`Missing lookupTableAccount for V2 pool: ${pool.id}`);
+        }
+
+        return {
+          id: new PublicKey(pool.ammId),
+          baseMint: new PublicKey(pool.baseMint),
+          quoteMint: new PublicKey(pool.quoteMint),
+          lpMint: new PublicKey(pool.lpMint),
+          baseDecimals: pool.baseDecimals,
+          quoteDecimals: pool.quoteDecimals,
+          lpDecimals: poolData.lpDecimals,
+          version: 4, // Version 4 corresponds to V2 pools in the SDK
+          programId: new PublicKey(poolData.programId),
+          authority: new PublicKey(poolData.authority),
+          openOrders: new PublicKey(poolData.openOrders),
+          targetOrders: new PublicKey(poolData.targetOrders),
+          baseVault: new PublicKey(poolData.baseVault),
+          quoteVault: new PublicKey(poolData.quoteVault),
+          withdrawQueue: new PublicKey(poolData.withdrawQueue),
+          lpVault: new PublicKey(poolData.lpVault),
+          marketVersion: 3,
+          marketId: new PublicKey(pool.marketId),
+          marketProgramId: new PublicKey(poolData.marketProgramId),
+          marketAuthority: new PublicKey(poolData.marketAuthority),
+          marketBaseVault: new PublicKey(poolData.marketBaseVault),
+          marketQuoteVault: new PublicKey(poolData.marketQuoteVault),
+          marketBids: new PublicKey(poolData.marketBids),
+          marketAsks: new PublicKey(poolData.marketAsks),
+          marketEventQueue: new PublicKey(poolData.marketEventQueue),
+          lookupTableAccount: new PublicKey(poolData.lookupTableAccount),
+        };
+      }
+    } catch (error) {
+      logger.error("Failed to get pool keys:", { error, poolId: pool.id });
+      throw error;
+    }
   }
 
-  private transformPositionsToDepth(_positions: unknown): {
-    bids: [number, number][];
-    asks: [number, number][];
-  } {
-    // Transform position data into order book format
-    // This is a placeholder - implement actual transformation
-    return {
-      bids: [],
-      asks: [],
-    };
+  private transformPositionsToDepth(positions: {
+    positions: Array<{
+      price: number;
+      liquidity: number;
+      baseAmount: number;
+      quoteAmount: number;
+    }>;
+  }): { bids: [number, number][]; asks: [number, number][] } {
+    if (!positions?.positions?.length) {
+      return { bids: [], asks: [] };
+    }
+
+    // Sort positions by price
+    const sortedPositions = [...positions.positions].sort(
+      (a, b) => a.price - b.price,
+    );
+    const midPrice =
+      sortedPositions[Math.floor(sortedPositions.length / 2)].price;
+
+    const bids: [number, number][] = [];
+    const asks: [number, number][] = [];
+
+    // Transform positions into bids and asks
+    for (const position of sortedPositions) {
+      const [price, size] = [
+        position.price,
+        Math.max(position.baseAmount, position.quoteAmount),
+      ];
+
+      if (price < midPrice) {
+        bids.push([price, size]);
+      } else {
+        asks.push([price, size]);
+      }
+    }
+
+    // Sort bids in descending order (highest price first)
+    bids.sort((a, b) => b[0] - a[0]);
+    // Sort asks in ascending order (lowest price first)
+    asks.sort((a, b) => a[0] - b[0]);
+
+    return { bids, asks };
   }
 
   private async fetchPoolLiquidity(
