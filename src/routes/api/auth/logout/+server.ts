@@ -1,13 +1,9 @@
 import { json } from "@sveltejs/kit";
 import type { RequestEvent } from "@sveltejs/kit";
 import type { RequestHandler } from "../$types";
-import { PrismaClient } from "@prisma/client";
-import { AuthService } from "$lib/services/auth.service";
+import { authService } from "$lib/services/api";
 import { verifyToken } from "$lib/utils/jwt";
 import { AuthenticationError } from "$lib/utils/errors";
-
-const prisma = new PrismaClient();
-const authService = new AuthService(prisma);
 
 export const POST: RequestHandler = async (event: RequestEvent) => {
   try {
@@ -20,12 +16,12 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
     }
 
     const token = authHeader.slice(7);
-    const { userId } = await verifyToken(token);
+    await verifyToken(token); // Just verify the token is valid
 
     // Logout user
-    const response = await authService.logout(userId);
+    await authService.logout(token);
 
-    return json(response);
+    return json({ success: true, message: "Logout successful" });
   } catch (error) {
     if (error instanceof AuthenticationError) {
       return json({ success: false, message: error.message }, { status: 401 });

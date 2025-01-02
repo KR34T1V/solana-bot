@@ -250,33 +250,25 @@ export class ManagedAuthService implements Service {
           },
         });
 
-        if (shouldLock) {
-          this.config.logger.logAccountLock({
-            email: user.email,
-            userId: user.id,
-            loginAttempts,
-            lockedUntil,
-          });
-        } else {
-          this.config.logger.logAuthFailure({
-            action: "login",
-            email: user.email,
-            userId: user.id,
-            failureReason: "Invalid password",
-            loginAttempts,
-          });
-        }
+        this.config.logger.logAuthFailure({
+          action: "login",
+          email: credentials.email,
+          userId: user.id,
+          failureReason: "Invalid password",
+          loginAttempts,
+          lockedUntil,
+        });
 
         throw new AuthenticationError("Invalid email or password");
       }
 
-      // Reset login attempts and update last login
+      // Reset login attempts on successful login
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
           loginAttempts: 0,
-          lockedUntil: null,
           lastLoginAt: new Date(),
+          lockedUntil: null,
         },
       });
 
@@ -323,34 +315,27 @@ export class ManagedAuthService implements Service {
     }
   }
 
-  async logout(userId: string) {
+  async logout(token: string): Promise<void> {
     this.ensureRunning();
     if (!this.prisma) return; // TypeScript guard
 
-    this.config.logger.logAuthAttempt({
-      action: "logout",
-      userId,
-    });
-
     try {
-      // Delete all sessions for user
-      await this.prisma.session.deleteMany({
-        where: { userId },
+      // Delete session
+      const result = await this.prisma.session.deleteMany({
+        where: { token },
       });
+
+      if (result.count === 0) {
+        throw new AuthenticationError("Invalid session");
+      }
 
       this.config.logger.logAuthSuccess({
         action: "logout",
-        userId,
       });
-
-      return {
-        success: true,
-        message: "Logout successful",
-      };
     } catch (error) {
-      this.config.logger.logError(error as Error, {
+      this.config.logger.logAuthFailure({
         action: "logout",
-        userId,
+        failureReason: error instanceof Error ? error.message : "Unknown error",
       });
       throw error;
     }

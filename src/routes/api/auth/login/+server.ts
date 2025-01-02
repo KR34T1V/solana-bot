@@ -1,12 +1,8 @@
 import type { RequestHandler } from "../$types";
 import { json } from "@sveltejs/kit";
-import { AuthService } from "$lib/services/auth.service";
-import { PrismaClient } from "@prisma/client";
+import { authService } from "$lib/services/api";
 import { loginSchema } from "$lib/utils/validation";
 import { ValidationError, AuthenticationError } from "$lib/utils/errors";
-
-const prisma = new PrismaClient();
-const authService = new AuthService(prisma);
 
 export const POST: RequestHandler = async (event) => {
   try {

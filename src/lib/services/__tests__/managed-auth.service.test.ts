@@ -72,7 +72,10 @@ describe("ManagedAuthService", () => {
   });
 
   afterEach(async () => {
-    await authService.stop();
+    // Only stop if not already stopped
+    if (authService.getStatus() !== ServiceStatus.STOPPED) {
+      await authService.stop();
+    }
   });
 
   describe("Service Lifecycle", () => {
@@ -99,8 +102,12 @@ describe("ManagedAuthService", () => {
     });
 
     it("should stop successfully", async () => {
+      // Start fresh
       mockConnect.mockResolvedValueOnce(undefined);
       await authService.start();
+      expect(authService.getStatus()).toBe(ServiceStatus.RUNNING);
+
+      // Test stop
       mockDisconnect.mockResolvedValueOnce(undefined);
       await authService.stop();
       expect(authService.getStatus()).toBe(ServiceStatus.STOPPED);
