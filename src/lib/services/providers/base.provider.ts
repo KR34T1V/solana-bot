@@ -1,20 +1,28 @@
 /**
- * @file Base Provider Service Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Base class for all managed market data providers
+ * @module lib/services/providers/base.provider
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { Service } from "../core/service.manager";
 import { ServiceStatus } from "../core/service.manager";
 import type { ManagedLoggingService } from "../core/managed-logging";
-import type { BaseProvider, PriceData, OHLCVData, MarketDepth, ProviderCapabilities } from "../../types/provider";
+import type {
+  BaseProvider,
+  PriceData,
+  OHLCVData,
+  MarketDepth,
+  ProviderCapabilities,
+} from "../../types/provider";
 
 export class ServiceError extends Error {
   constructor(
     message: string,
     public readonly code: string,
     public readonly isRetryable: boolean,
-    public readonly details?: Record<string, unknown>
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ServiceError";
@@ -46,7 +54,7 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
       cacheTimeout: 30000, // 30 seconds
       retryAttempts: 3,
       rateLimitMs: 100,
-      ...config
+      ...config,
     };
     this.logger = logger;
     this.cache = new Map();
@@ -64,7 +72,11 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   async start(): Promise<void> {
     try {
       if (this.status === ServiceStatus.RUNNING) {
-        throw new ServiceError("Provider already running", "ALREADY_RUNNING", false);
+        throw new ServiceError(
+          "Provider already running",
+          "ALREADY_RUNNING",
+          false,
+        );
       }
 
       this.status = ServiceStatus.STARTING;
@@ -76,9 +88,9 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
       this.logger.info("Provider started", { provider: this.getName() });
     } catch (error) {
       this.status = ServiceStatus.ERROR;
-      this.logger.error("Failed to start provider", { 
+      this.logger.error("Failed to start provider", {
         provider: this.getName(),
-        error 
+        error,
       });
       throw error;
     }
@@ -87,7 +99,11 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   async stop(): Promise<void> {
     try {
       if (this.status === ServiceStatus.STOPPED) {
-        throw new ServiceError("Provider already stopped", "ALREADY_STOPPED", false);
+        throw new ServiceError(
+          "Provider already stopped",
+          "ALREADY_STOPPED",
+          false,
+        );
       }
 
       this.status = ServiceStatus.STOPPING;
@@ -102,7 +118,7 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
       this.status = ServiceStatus.ERROR;
       this.logger.error("Failed to stop provider", {
         provider: this.getName(),
-        error
+        error,
       });
       throw error;
     }
@@ -115,8 +131,15 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected abstract initializeProvider(): Promise<void>;
   protected abstract cleanupProvider(): Promise<void>;
   protected abstract getPriceImpl(tokenMint: string): Promise<PriceData>;
-  protected abstract getOrderBookImpl(tokenMint: string, limit?: number): Promise<MarketDepth>;
-  protected abstract getOHLCVImpl(tokenMint: string, timeframe: number, limit: number): Promise<OHLCVData>;
+  protected abstract getOrderBookImpl(
+    tokenMint: string,
+    limit?: number,
+  ): Promise<MarketDepth>;
+  protected abstract getOHLCVImpl(
+    tokenMint: string,
+    timeframe: number,
+    limit: number,
+  ): Promise<OHLCVData>;
 
   // Public interface methods
   async getPrice(tokenMint: string): Promise<PriceData> {
@@ -129,9 +152,15 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
     return this.withRateLimit(() => this.getOrderBookImpl(tokenMint, limit));
   }
 
-  async getOHLCV(tokenMint: string, timeframe: number, limit: number): Promise<OHLCVData> {
+  async getOHLCV(
+    tokenMint: string,
+    timeframe: number,
+    limit: number,
+  ): Promise<OHLCVData> {
     this.validateRunning();
-    return this.withRateLimit(() => this.getOHLCVImpl(tokenMint, timeframe, limit));
+    return this.withRateLimit(() =>
+      this.getOHLCVImpl(tokenMint, timeframe, limit),
+    );
   }
 
   // Protected utility methods
@@ -140,7 +169,7 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
       throw new ServiceError(
         `Provider ${this.getName()} is not running`,
         "NOT_RUNNING",
-        false
+        false,
       );
     }
   }
@@ -148,12 +177,15 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected async enforceRateLimit(): Promise<void> {
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequest;
-    const waitTime = Math.max(0, this.config.rateLimitMs! - timeSinceLastRequest);
-    
+    const waitTime = Math.max(
+      0,
+      this.config.rateLimitMs! - timeSinceLastRequest,
+    );
+
     if (waitTime > 0) {
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
-    
+
     this.lastRequest = Date.now(); // Update after waiting to ensure precise timing
   }
 
@@ -179,24 +211,27 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected setCached<T>(key: string, data: T): void {
     this.cache.set(key, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
-  protected validateOperation(operation: string, capability: keyof ProviderCapabilities): void {
+  protected validateOperation(
+    operation: string,
+    capability: keyof ProviderCapabilities,
+  ): void {
     this.validateRunning();
     if (!this.getCapabilities()[capability]) {
       throw new ServiceError(
         `Operation ${operation} not supported by provider ${this.getName()}`,
         "OPERATION_NOT_SUPPORTED",
-        false
+        false,
       );
     }
   }
 
   protected async handleOperation<T>(
     operation: () => Promise<T>,
-    description: string
+    description: string,
   ): Promise<T> {
     try {
       return await operation();
@@ -205,4 +240,4 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
       throw error;
     }
   }
-} 
+}

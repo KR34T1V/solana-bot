@@ -1,21 +1,9 @@
 /**
- * @file Jupiter Provider Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Test suite for Jupiter provider implementation that verifies proper integration
- * with Jupiter Protocol's price and liquidity services. This test suite ensures the provider
- * correctly implements the BaseProvider interface and handles all service lifecycle events.
- *
- * @remarks
- * Test Coverage:
- * - Service lifecycle (start/stop)
- * - Price fetching and validation
- * - Error handling and recovery
- * - Connection management
- *
- * @dependencies
- * - @solana/web3.js for blockchain interaction
- * - axios for API communication
- * - ManagedLoggingService for logging
+ * @module lib/services/providers/__tests__/jupiter.provider.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

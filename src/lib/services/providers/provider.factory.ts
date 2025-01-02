@@ -1,7 +1,9 @@
 /**
- * @file Provider Factory Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Factory for creating and managing market data providers
+ * @module lib/services/providers/provider.factory
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { Connection } from "@solana/web3.js";

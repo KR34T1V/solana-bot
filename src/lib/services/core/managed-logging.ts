@@ -1,7 +1,9 @@
 /**
- * @file Managed Logging Service Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Service manager compatible logging service with enhanced lifecycle management
+ * @module lib/services/core/managed-logging
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import winston from "winston";
@@ -68,7 +70,10 @@ export class ManagedLoggingService implements Service {
 
   constructor(config: LoggingConfig = {}) {
     // Validate log directory
-    if (config.logDir !== undefined && (!config.logDir || typeof config.logDir !== "string")) {
+    if (
+      config.logDir !== undefined &&
+      (!config.logDir || typeof config.logDir !== "string")
+    ) {
       throw new Error("Invalid log directory");
     }
 

@@ -1,7 +1,9 @@
 /**
- * @file Example Counter Service
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description A simple counter service for testing the service test framework
+ * @module lib/services/examples/counter.service
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { ServiceStatus } from "../core/service.manager";

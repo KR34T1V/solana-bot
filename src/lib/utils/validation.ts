@@ -1,3 +1,11 @@
+/**
+ * @file Utility functions and helpers
+ * @version 1.0.0
+ * @module lib/utils/validation
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import { z } from "zod";
 
 const emailSchema = z

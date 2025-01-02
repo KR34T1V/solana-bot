@@ -1,7 +1,9 @@
 /**
- * @file Sniper Service Interface
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Interface for sniping services
+ * @module lib/services/interfaces/sniper
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { Service } from "./service";
@@ -170,12 +172,19 @@ export interface Sniper extends Service {
   /**
    * Handle liquidity analysis update
    */
-  handleLiquidityUpdate(poolAddress: string, result: AnalysisResult): Promise<void>;
+  handleLiquidityUpdate(
+    poolAddress: string,
+    result: AnalysisResult,
+  ): Promise<void>;
 
   /**
    * Execute a trade
    */
-  executeTrade(token: string, type: "BUY" | "SELL", amount: number): Promise<TradeResult>;
+  executeTrade(
+    token: string,
+    type: "BUY" | "SELL",
+    amount: number,
+  ): Promise<TradeResult>;
 
   /**
    * Subscribe to trade events
@@ -186,4 +195,4 @@ export interface Sniper extends Service {
    * Unsubscribe from trade events
    */
   offTrade(callback: (result: TradeResult) => void): void;
-} 
+}

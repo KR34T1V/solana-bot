@@ -1,7 +1,9 @@
 /**
- * @file Detector Service Interface
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Interface for detector services
+ * @module lib/services/interfaces/detector
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { Service } from "./service";
@@ -108,4 +110,4 @@ export interface Detector extends Service {
    * Unsubscribe from token detection events
    */
   offTokenDetected(callback: (event: TokenDetectionEvent) => void): void;
-} 
+}

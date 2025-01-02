@@ -1,6 +1,9 @@
 /**
- * @file Tests for Managed Logging Service
+ * @file Test suite for validating functionality
  * @version 1.0.0
+ * @module lib/services/__tests__/managed-logging.service.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

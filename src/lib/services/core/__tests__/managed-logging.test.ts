@@ -1,7 +1,9 @@
 /**
- * @file Managed Logging Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Test suite for managed logging implementation
+ * @module lib/services/core/__tests__/managed-logging.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -16,7 +18,7 @@ describe("ManagedLoggingService", () => {
     service = new ManagedLoggingService({
       logDir: "./logs",
       level: "debug",
-      serviceName: "test-logging"
+      serviceName: "test-logging",
     });
   });
 
@@ -82,11 +84,11 @@ describe("ManagedLoggingService", () => {
           }
           return mockLogger;
         }),
-        end: vi.fn()
+        end: vi.fn(),
       };
       // @ts-expect-error - Accessing private property for testing
       service.logger = mockLogger;
-      
+
       await service.stop();
       service.info("test");
       service.error("test");
@@ -102,19 +104,25 @@ describe("ManagedLoggingService", () => {
 
   describe("Configuration", () => {
     it("should validate log directory", () => {
-      expect(() => new ManagedLoggingService({
-        logDir: "",
-        level: "debug",
-        serviceName: "test-logging"
-      })).toThrow("Invalid log directory");
+      expect(
+        () =>
+          new ManagedLoggingService({
+            logDir: "",
+            level: "debug",
+            serviceName: "test-logging",
+          }),
+      ).toThrow("Invalid log directory");
     });
 
     it("should validate log level", () => {
-      expect(() => new ManagedLoggingService({
-        logDir: "./logs",
-        level: "invalid",
-        serviceName: "test-logging"
-      })).toThrow("Invalid log level");
+      expect(
+        () =>
+          new ManagedLoggingService({
+            logDir: "./logs",
+            level: "invalid",
+            serviceName: "test-logging",
+          }),
+      ).toThrow("Invalid log level");
     });
   });
 });

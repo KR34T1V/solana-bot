@@ -1,7 +1,9 @@
 /**
- * @file Base Service Test Suite
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Base test suite that all service tests must extend
+ * @module lib/services/__tests__/base-service.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, beforeEach, afterEach, it, expect } from "vitest";

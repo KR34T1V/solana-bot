@@ -1,13 +1,20 @@
 /**
- * @file Jupiter API Provider Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Provider implementation for Jupiter Price API V2
+ * @module lib/services/providers/jupiter.provider
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import axios from "axios";
 import type { Connection } from "@solana/web3.js";
 import type { ManagedLoggingService } from "../core/managed-logging";
-import type { PriceData, OHLCVData, MarketDepth, ProviderCapabilities } from "../../types/provider";
+import type {
+  PriceData,
+  OHLCVData,
+  MarketDepth,
+  ProviderCapabilities,
+} from "../../types/provider";
 import { ManagedProviderBase, type ProviderConfig } from "./base.provider";
 
 interface JupiterPriceResponse {
@@ -38,7 +45,7 @@ export class JupiterProvider extends ManagedProviderBase {
   constructor(
     config: ExtendedProviderConfig,
     logger: ManagedLoggingService,
-    connection: Connection
+    connection: Connection,
   ) {
     super(config, logger);
     this.connection = connection;
@@ -50,7 +57,9 @@ export class JupiterProvider extends ManagedProviderBase {
       await axios.get(`${this.baseUrl}/price`);
       this.logger.info("Jupiter API connection established");
     } catch (error) {
-      this.logger.error("Failed to initialize Jupiter API connection", { error });
+      this.logger.error("Failed to initialize Jupiter API connection", {
+        error,
+      });
       throw error;
     }
   }
@@ -61,11 +70,18 @@ export class JupiterProvider extends ManagedProviderBase {
 
   protected override async getPriceImpl(tokenMint: string): Promise<PriceData> {
     try {
-      const response = await axios.get<JupiterPriceResponse>(`${this.baseUrl}/price`, {
-        params: { ids: tokenMint },
-      });
+      const response = await axios.get<JupiterPriceResponse>(
+        `${this.baseUrl}/price`,
+        {
+          params: { ids: tokenMint },
+        },
+      );
 
-      if (!response.data || !response.data.data || !response.data.data[tokenMint]) {
+      if (
+        !response.data ||
+        !response.data.data ||
+        !response.data.data[tokenMint]
+      ) {
         throw new Error("Invalid response format");
       }
 
@@ -88,16 +104,22 @@ export class JupiterProvider extends ManagedProviderBase {
     return {
       canGetPrice: true,
       canGetOHLCV: false,
-      canGetOrderBook: true
+      canGetOrderBook: true,
     };
   }
 
   // Protected Implementation Methods
-  protected override async getOrderBookImpl(tokenMint: string, limit: number = 100): Promise<MarketDepth> {
+  protected override async getOrderBookImpl(
+    tokenMint: string,
+    limit: number = 100,
+  ): Promise<MarketDepth> {
     try {
-      const response = await axios.get<JupiterOrderBookResponse>(`${this.baseUrl}/orderbook/${tokenMint}`, {
-        params: { limit },
-      });
+      const response = await axios.get<JupiterOrderBookResponse>(
+        `${this.baseUrl}/orderbook/${tokenMint}`,
+        {
+          params: { limit },
+        },
+      );
 
       return {
         bids: response.data.bids,
@@ -113,7 +135,11 @@ export class JupiterProvider extends ManagedProviderBase {
     }
   }
 
-  protected override async getOHLCVImpl(_tokenMint: string, _timeframe: number, _limit: number): Promise<OHLCVData> {
+  protected override async getOHLCVImpl(
+    _tokenMint: string,
+    _timeframe: number,
+    _limit: number,
+  ): Promise<OHLCVData> {
     // This should never be called since canGetOHLCV is false
     throw new Error("This should never be called");
   }

@@ -1,23 +1,9 @@
 /**
- * @file Base Service Test
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Base class for service test implementations that enforces consistent testing patterns
- * across all services. This class provides a standard set of lifecycle tests that all services
- * must pass to ensure they properly implement the Service interface.
- *
- * @example
- * ```typescript
- * class CounterServiceTest extends BaseServiceTest<CounterService> {
- *   getService(): CounterService {
- *     return new CounterService();
- *   }
- *
- *   runTests(): void {
- *     super.runServiceTests(); // Run standard lifecycle tests
- *     // Add service-specific tests...
- *   }
- * }
- * ```
+ * @module lib/services/core/__tests__/base.service.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, beforeEach } from "vitest";

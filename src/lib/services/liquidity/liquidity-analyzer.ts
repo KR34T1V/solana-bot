@@ -1,7 +1,9 @@
 /**
- * @file Liquidity Analysis Service
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Real-time liquidity analysis for new token pools
+ * @module lib/services/liquidity/liquidity-analyzer
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { type Connection } from "@solana/web3.js";

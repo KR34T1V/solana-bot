@@ -1,7 +1,9 @@
 /**
- * @file Analyzer Service Interface
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Interface for analyzer services
+ * @module lib/services/interfaces/analyzer
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { Service } from "./service";
@@ -136,4 +138,4 @@ export interface Analyzer extends Service {
   offAnalysisUpdate(
     callback: (poolAddress: string, result: AnalysisResult) => void,
   ): void;
-} 
+}

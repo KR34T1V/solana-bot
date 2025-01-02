@@ -1,3 +1,11 @@
+/**
+ * @file Utility functions and helpers
+ * @version 1.0.0
+ * @module tests/setup
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import { vi } from "vitest";
 import { mockUser } from "./fixtures/auth";
 import type { PrismaClient, Prisma } from "@prisma/client";

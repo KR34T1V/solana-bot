@@ -1,7 +1,9 @@
 /**
- * @file Raydium Provider Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Test suite for Raydium provider implementation
+ * @module lib/services/providers/__tests__/raydium.provider.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -61,15 +63,21 @@ describe("Raydium Provider", () => {
     });
 
     it("should throw not implemented for price", async () => {
-      await expect(provider.getPrice("test-token")).rejects.toThrow("Not implemented");
+      await expect(provider.getPrice("test-token")).rejects.toThrow(
+        "Not implemented",
+      );
     });
 
     it("should throw not implemented for order book", async () => {
-      await expect(provider.getOrderBook("test-token")).rejects.toThrow("Not implemented");
+      await expect(provider.getOrderBook("test-token")).rejects.toThrow(
+        "Not implemented",
+      );
     });
 
     it("should throw not implemented for OHLCV", async () => {
-      await expect(provider.getOHLCV("test-token", 3600, 100)).rejects.toThrow("Not implemented");
+      await expect(provider.getOHLCV("test-token", 3600, 100)).rejects.toThrow(
+        "Not implemented",
+      );
     });
   });
 });

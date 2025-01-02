@@ -1,7 +1,9 @@
 /**
- * @file API Service Instances
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Shared service instances for API routes
+ * @module lib/services/api
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { PrismaClient } from "@prisma/client";

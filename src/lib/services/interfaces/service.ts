@@ -1,7 +1,9 @@
 /**
- * @file Service Interface
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Base interface for all managed services
+ * @module lib/services/interfaces/service
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { ServiceStatus } from "../core/service.manager";
@@ -84,4 +86,4 @@ export interface ServiceMetadata {
    * Current service status
    */
   status: ServiceStatus;
-} 
+}

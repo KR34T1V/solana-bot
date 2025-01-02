@@ -1,7 +1,9 @@
 /**
- * @file Tests for provider factory
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Test suite for provider factory implementation
+ * @module lib/services/providers/__tests__/provider.factory.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -36,34 +38,62 @@ describe("Provider Factory", () => {
 
   describe("Provider Creation", () => {
     it("should create Jupiter provider", () => {
-      const provider = ProviderFactory.getProvider(ProviderType.JUPITER, mockLogger, mockConnection);
+      const provider = ProviderFactory.getProvider(
+        ProviderType.JUPITER,
+        mockLogger,
+        mockConnection,
+      );
       expect(provider).toBeDefined();
       expect(provider.getCapabilities().canGetPrice).toBe(true);
     });
 
     it("should create Raydium provider", () => {
-      const provider = ProviderFactory.getProvider(ProviderType.RAYDIUM, mockLogger, mockConnection);
+      const provider = ProviderFactory.getProvider(
+        ProviderType.RAYDIUM,
+        mockLogger,
+        mockConnection,
+      );
       expect(provider).toBeDefined();
       expect(provider.getCapabilities().canGetPrice).toBe(true);
     });
 
     it("should throw for unknown provider type", () => {
-      expect(() => 
-        ProviderFactory.getProvider("unknown" as ProviderType, mockLogger, mockConnection)
+      expect(() =>
+        ProviderFactory.getProvider(
+          "unknown" as ProviderType,
+          mockLogger,
+          mockConnection,
+        ),
       ).toThrow("Unknown provider type");
     });
   });
 
   describe("Provider Caching", () => {
     it("should reuse existing provider instances", () => {
-      const provider1 = ProviderFactory.getProvider(ProviderType.JUPITER, mockLogger, mockConnection);
-      const provider2 = ProviderFactory.getProvider(ProviderType.JUPITER, mockLogger, mockConnection);
+      const provider1 = ProviderFactory.getProvider(
+        ProviderType.JUPITER,
+        mockLogger,
+        mockConnection,
+      );
+      const provider2 = ProviderFactory.getProvider(
+        ProviderType.JUPITER,
+        mockLogger,
+        mockConnection,
+      );
       expect(provider1).toBe(provider2);
     });
 
     it("should create separate instances for different types", () => {
-      const jupiterProvider = ProviderFactory.getProvider(ProviderType.JUPITER, mockLogger, mockConnection);
-      const raydiumProvider = ProviderFactory.getProvider(ProviderType.RAYDIUM, mockLogger, mockConnection);
+      const jupiterProvider = ProviderFactory.getProvider(
+        ProviderType.JUPITER,
+        mockLogger,
+        mockConnection,
+      );
+      const raydiumProvider = ProviderFactory.getProvider(
+        ProviderType.RAYDIUM,
+        mockLogger,
+        mockConnection,
+      );
       expect(jupiterProvider).not.toBe(raydiumProvider);
     });
   });

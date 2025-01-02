@@ -1,3 +1,11 @@
+/**
+ * @file Test suite for validating functionality
+ * @version 1.0.0
+ * @module lib/services/sniping/__tests__/__mocks__/token-sniper.mocks
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import { vi } from "vitest";
 
 export const mockOnProgramAccountChange = vi.fn(() => 123);
@@ -28,13 +36,11 @@ vi.mock("../../../logging.service", () => ({
 vi.mock("../../../providers/provider.factory", () => ({
   ProviderFactory: {
     getProvider: vi.fn(() => ({
-      getPrice: vi
-        .fn()
-        .mockResolvedValue({
-          price: 1.0,
-          timestamp: Date.now(),
-          confidence: 0.95,
-        }),
+      getPrice: vi.fn().mockResolvedValue({
+        price: 1.0,
+        timestamp: Date.now(),
+        confidence: 0.95,
+      }),
       getOrderBook: vi.fn().mockResolvedValue({
         bids: [[1.0, 1000]],
         asks: [[1.1, 1000]],

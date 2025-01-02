@@ -1,7 +1,9 @@
 /**
- * @file Managed Authentication Service Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Service manager compatible authentication service with lifecycle management
+ * @module lib/services/core/managed-auth
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { PrismaClient } from "@prisma/client";

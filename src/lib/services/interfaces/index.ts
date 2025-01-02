@@ -1,11 +1,13 @@
 /**
- * @file Service Interfaces Index
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Exports all service interfaces
+ * @module lib/services/interfaces/index
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 export * from "./service";
 export * from "./provider";
 export * from "./detector";
 export * from "./analyzer";
-export * from "./sniper"; 
+export * from "./sniper";

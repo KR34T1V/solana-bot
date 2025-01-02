@@ -1,12 +1,19 @@
 /**
- * @file Raydium Provider Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Provider implementation for Raydium DEX
+ * @module lib/services/providers/raydium.provider
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { Connection } from "@solana/web3.js";
 import type { ManagedLoggingService } from "../core/managed-logging";
-import type { PriceData, OHLCVData, MarketDepth, ProviderCapabilities } from "../../types/provider";
+import type {
+  PriceData,
+  OHLCVData,
+  MarketDepth,
+  ProviderCapabilities,
+} from "../../types/provider";
 import { ManagedProviderBase, type ProviderConfig } from "./base.provider";
 
 export class RaydiumProvider extends ManagedProviderBase {
@@ -15,7 +22,7 @@ export class RaydiumProvider extends ManagedProviderBase {
   constructor(
     config: ProviderConfig,
     logger: ManagedLoggingService,
-    connection: Connection
+    connection: Connection,
   ) {
     super(config, logger);
     this.connection = connection;
@@ -36,17 +43,26 @@ export class RaydiumProvider extends ManagedProviderBase {
     // Nothing to clean up
   }
 
-  protected override async getPriceImpl(_tokenMint: string): Promise<PriceData> {
+  protected override async getPriceImpl(
+    _tokenMint: string,
+  ): Promise<PriceData> {
     // TODO: Implement Raydium price fetching
     throw new Error("Not implemented");
   }
 
-  protected override async getOrderBookImpl(_tokenMint: string, _limit: number = 100): Promise<MarketDepth> {
+  protected override async getOrderBookImpl(
+    _tokenMint: string,
+    _limit: number = 100,
+  ): Promise<MarketDepth> {
     // TODO: Implement Raydium order book fetching
     throw new Error("Not implemented");
   }
 
-  protected override async getOHLCVImpl(_tokenMint: string, _timeframe: number, _limit: number): Promise<OHLCVData> {
+  protected override async getOHLCVImpl(
+    _tokenMint: string,
+    _timeframe: number,
+    _limit: number,
+  ): Promise<OHLCVData> {
     // TODO: Implement Raydium OHLCV fetching
     throw new Error("Not implemented");
   }

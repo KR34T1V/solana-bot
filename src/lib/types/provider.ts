@@ -1,7 +1,9 @@
 /**
- * @file Provider Type Definitions
+ * @file TypeScript type definitions and interfaces
  * @version 1.0.0
- * @description Type definitions for market data providers
+ * @module lib/types/provider
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 export interface PriceData {
@@ -42,7 +44,11 @@ export interface BaseProvider {
    * Get OHLCV data for a token
    * @throws {Error} If OHLCV data is not available
    */
-  getOHLCV(tokenMint: string, timeframe: number, limit: number): Promise<OHLCVData>;
+  getOHLCV(
+    tokenMint: string,
+    timeframe: number,
+    limit: number,
+  ): Promise<OHLCVData>;
 
   /**
    * Get order book data for a token

@@ -1,7 +1,9 @@
 /**
- * @file Authentication API Routes
+ * @file API route handler for HTTP endpoints
  * @version 1.0.0
- * @description API routes for user authentication
+ * @module routes/api/auth/+server
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { json } from "@sveltejs/kit";

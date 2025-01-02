@@ -1,7 +1,9 @@
 /**
- * @file Test Suite for Managed Authentication Service
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Tests for service manager compatible authentication service
+ * @module lib/services/__tests__/managed-auth.service.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

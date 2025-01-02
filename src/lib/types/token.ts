@@ -1,6 +1,9 @@
 /**
- * @file Token type definitions
+ * @file TypeScript type definitions and interfaces
  * @version 1.0.0
+ * @module lib/types/token
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 export interface TokenInfo {

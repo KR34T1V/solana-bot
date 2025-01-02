@@ -1,3 +1,11 @@
+/**
+ * @file Service implementation for business logic
+ * @version 1.0.0
+ * @module lib/services/logging.service
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import winston from "winston";
 import { join } from "path";
 

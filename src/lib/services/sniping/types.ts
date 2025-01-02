@@ -1,6 +1,9 @@
 /**
- * @file Token Sniping Types
+ * @file Service implementation for business logic
  * @version 1.0.0
+ * @module lib/services/sniping/types
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 export interface TokenValidation {

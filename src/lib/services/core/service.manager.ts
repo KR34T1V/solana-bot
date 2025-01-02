@@ -1,7 +1,9 @@
 /**
- * @file Service Manager implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Manages service lifecycle and dependencies
+ * @module lib/services/core/service.manager
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import type { ManagedLoggingService } from "./managed-logging";

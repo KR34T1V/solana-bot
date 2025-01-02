@@ -1,3 +1,11 @@
+/**
+ * @file Test suite for validating functionality
+ * @version 1.0.0
+ * @module lib/services/liquidity/__tests__/liquidity-analyzer.test
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Connection } from "@solana/web3.js";
 import {

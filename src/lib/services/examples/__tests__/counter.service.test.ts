@@ -1,7 +1,9 @@
 /**
- * @file Counter Service Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Test suite for counter service implementation
+ * @module lib/services/examples/__tests__/counter.service.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

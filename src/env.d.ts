@@ -1,3 +1,11 @@
+/**
+ * @file Utility functions and helpers
+ * @version 1.0.0
+ * @module env.d
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {

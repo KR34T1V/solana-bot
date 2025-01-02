@@ -1,7 +1,9 @@
 /**
- * @file Managed Token Sniper Implementation
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Service manager compatible token sniper implementation
+ * @module lib/services/sniping/managed-token-sniper
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { Connection, PublicKey } from "@solana/web3.js";

@@ -1,7 +1,9 @@
 /**
- * @file Service Manager Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Tests for service manager implementation
+ * @module lib/services/__tests__/service.manager.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

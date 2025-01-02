@@ -1,3 +1,11 @@
+/**
+ * @file API route handler for HTTP endpoints
+ * @version 1.0.0
+ * @module routes/api/auth/login/+server
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import type { RequestHandler } from "../$types";
 import { json } from "@sveltejs/kit";
 import { authService } from "$lib/services/api";

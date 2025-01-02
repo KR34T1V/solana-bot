@@ -1,41 +1,52 @@
 /**
- * @file Jupiter Provider Test Script
+ * @file Test script for Jupiter DEX integration
  * @version 1.0.0
- * @description Test script for Jupiter provider implementation
+ * @module lib/scripts/test-jupiter
+ * @author Development Team
+ * @lastModified 2024-01-02
  */
 
 import { Connection } from "@solana/web3.js";
-import { ProviderFactory, ProviderType } from "../services/providers/provider.factory";
-import { ManagedLoggingService } from "../services/core/managed-logging";
-import type { ManagedProviderBase } from "../services/providers/base.provider";
+import {
+  ProviderFactory,
+  ProviderType,
+} from "$lib/services/providers/provider.factory";
+import { ManagedLoggingService } from "$lib/services/core/managed-logging";
+import type { ManagedProviderBase } from "$lib/services/providers/base.provider";
 
-async function main() {
+/**
+ * @function main
+ * @description Main entry point for testing Jupiter DEX integration
+ *
+ * @returns {Promise<void>} Resolves when test is complete
+ * @throws {Error} If any Jupiter operations fail
+ */
+async function main(): Promise<void> {
   const logger = new ManagedLoggingService({
     logDir: "./logs",
-    level: "info",
-    serviceName: "test-logger",
+    level: "debug",
+    serviceName: "jupiter-test",
   });
 
   await logger.start();
 
   const connection = new Connection("https://api.mainnet-beta.solana.com");
-
   const provider = ProviderFactory.getProvider(
     ProviderType.JUPITER,
     logger,
     connection,
   ) as ManagedProviderBase;
 
-  await provider.start();
-
   try {
-    const price = await provider.getPrice("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+    await provider.start();
+
+    // Test USDC price and order book
+    const usdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const price = await provider.getPrice(usdcMint);
     console.log("USDC Price:", price);
 
-    const orderBook = await provider.getOrderBook("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    const orderBook = await provider.getOrderBook(usdcMint);
     console.log("USDC Order Book:", orderBook);
-  } catch (error) {
-    console.error("Error:", error);
   } finally {
     await provider.stop();
     await logger.stop();

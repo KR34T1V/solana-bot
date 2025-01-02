@@ -1,12 +1,19 @@
 /**
- * @file Base Provider Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
- * @description Test suite for base provider implementation
+ * @module lib/services/providers/__tests__/base.provider.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { ManagedLoggingService } from "../../core/managed-logging";
-import type { PriceData, OHLCVData, MarketDepth, ProviderCapabilities } from "../../../types/provider";
+import type {
+  PriceData,
+  OHLCVData,
+  MarketDepth,
+  ProviderCapabilities,
+} from "../../../types/provider";
 import { ManagedProviderBase, type ProviderConfig } from "../base.provider";
 import { ServiceStatus } from "../../core/service.manager";
 
@@ -23,7 +30,9 @@ class TestProvider extends ManagedProviderBase {
     // Test implementation
   }
 
-  protected override async getPriceImpl(_tokenMint: string): Promise<PriceData> {
+  protected override async getPriceImpl(
+    _tokenMint: string,
+  ): Promise<PriceData> {
     return {
       price: 1.0,
       timestamp: Date.now(),
@@ -31,7 +40,10 @@ class TestProvider extends ManagedProviderBase {
     };
   }
 
-  protected override async getOrderBookImpl(_tokenMint: string, _limit: number): Promise<MarketDepth> {
+  protected override async getOrderBookImpl(
+    _tokenMint: string,
+    _limit: number,
+  ): Promise<MarketDepth> {
     return {
       bids: [[1.0, 1.0]],
       asks: [[1.1, 1.0]],
@@ -39,7 +51,11 @@ class TestProvider extends ManagedProviderBase {
     };
   }
 
-  protected override async getOHLCVImpl(_tokenMint: string, _timeframe: number, _limit: number): Promise<OHLCVData> {
+  protected override async getOHLCVImpl(
+    _tokenMint: string,
+    _timeframe: number,
+    _limit: number,
+  ): Promise<OHLCVData> {
     const now = Date.now();
     return {
       open: 1.0,
@@ -134,4 +150,4 @@ describe("Base Provider", () => {
       });
     });
   });
-}); 
+});

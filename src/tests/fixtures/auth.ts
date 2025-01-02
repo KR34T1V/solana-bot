@@ -1,3 +1,11 @@
+/**
+ * @file Utility functions and helpers
+ * @version 1.0.0
+ * @module tests/fixtures/auth
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import type { User } from "@prisma/client";
 import type { LoginCredentials, RegistrationData } from "$lib/types/auth";
 

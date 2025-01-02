@@ -1,6 +1,9 @@
 /**
- * @file Managed Token Sniper Tests
+ * @file Test suite for validating functionality
  * @version 1.0.0
+ * @module lib/services/sniping/__tests__/managed-token-sniper.test
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 // Mock modules must be defined before any imports

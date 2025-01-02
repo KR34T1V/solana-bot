@@ -1,3 +1,11 @@
+/**
+ * @file TypeScript type definitions and interfaces
+ * @version 1.0.0
+ * @module lib/types/auth
+ * @author Development Team
+ * @lastModified 2025-01-02
+ */
+
 import type { User } from "@prisma/client";
 
 export type SafeUser = Omit<User, "password">;

@@ -1,7 +1,9 @@
 /**
- * @file Token Detection Service
+ * @file Service implementation for business logic
  * @version 1.0.0
- * @description Real-time detection of new token mints on Solana
+ * @module lib/services/detection/token-detector
+ * @author Development Team
+ * @lastModified 2025-01-02
  */
 
 import { type Connection, PublicKey, type Logs } from "@solana/web3.js";
