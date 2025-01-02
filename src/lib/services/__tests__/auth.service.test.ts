@@ -1,79 +1,104 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import * as bcrypt from "bcryptjs";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AuthService } from "../auth.service";
+import { ValidationError } from "$lib/utils/errors";
+import { mockUser, validRegistrationData } from "$tests/fixtures/auth";
 import { PrismaClient } from "@prisma/client";
-import {
-  mockUser,
-  validRegistrationData,
-  validLoginCredentials,
-} from "$tests/fixtures/auth";
-import type { Mock } from "vitest";
-
-vi.mock("bcryptjs");
-vi.mock("@prisma/client");
 
 describe("AuthService", () => {
   let authService: AuthService;
   let prisma: PrismaClient;
-  const hashedPassword = "hashedPassword";
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = new PrismaClient();
     authService = new AuthService(prisma);
-
-    // Type assertion to handle mock types
-    (bcrypt.hash as unknown as Mock).mockResolvedValue(hashedPassword);
-    (bcrypt.compare as unknown as Mock).mockResolvedValue(true);
   });
 
   describe("register", () => {
-    it("should register a new user successfully", async () => {
-      const response = await authService.register(validRegistrationData);
+    it("should successfully register a new user", async () => {
+      // Mock findUnique to return null (no existing user)
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
 
-      expect(response.success).toBe(true);
-      expect(response.message).toBe("Registration successful");
-      expect(response.data?.user).toBeDefined();
-      expect(response.data?.token).toBeDefined();
+      const result = await authService.register(validRegistrationData);
+
+      expect(result).toEqual({
+        success: true,
+        message: "Registration successful",
+        data: {
+          user: {
+            id: "new-user-id",
+            email: validRegistrationData.email,
+          },
+          token: "mock.jwt.token",
+        },
+      });
     });
 
-    it("should throw an error if email already exists", async () => {
+    it("should throw error if email already exists", async () => {
+      // Mock findUnique to return existing user
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser);
 
       await expect(authService.register(validRegistrationData)).rejects.toThrow(
-        "Registration failed",
+        ValidationError,
       );
     });
   });
 
   describe("login", () => {
-    it("should login user successfully", async () => {
+    it("should successfully login a user", async () => {
+      // Mock findUnique to return valid user
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser);
-      (bcrypt.compare as unknown as Mock).mockResolvedValueOnce(true);
 
-      const response = await authService.login(validLoginCredentials);
+      const result = await authService.login({
+        email: "test@example.com",
+        password: "Password123!",
+      });
 
-      expect(response.success).toBe(true);
-      expect(response.message).toBe("Login successful");
-      expect(response.data?.user).toBeDefined();
-      expect(response.data?.token).toBeDefined();
+      expect(result).toEqual({
+        success: true,
+        message: "Login successful",
+        data: {
+          user: {
+            id: mockUser.id,
+            email: mockUser.email,
+          },
+          token: "mock.jwt.token",
+        },
+      });
     });
 
-    it("should throw an error if user not found", async () => {
+    it("should throw error for invalid credentials", async () => {
+      // Mock findUnique to return user for password check
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser);
+
+      await expect(
+        authService.login({
+          email: "test@example.com",
+          password: "wrongpassword",
+        }),
+      ).rejects.toThrow("Invalid email or password");
+    });
+
+    it("should throw error for non-existent user", async () => {
+      // Mock findUnique to return null
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
 
-      await expect(authService.login(validLoginCredentials)).rejects.toThrow(
-        "Invalid email or password",
-      );
+      await expect(
+        authService.login({
+          email: "nonexistent@example.com",
+          password: "Password123!",
+        }),
+      ).rejects.toThrow("Invalid email or password");
     });
+  });
 
-    it("should throw an error if password is invalid", async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser);
-      (bcrypt.compare as unknown as Mock).mockResolvedValueOnce(false);
-
-      await expect(authService.login(validLoginCredentials)).rejects.toThrow(
-        "Invalid email or password",
-      );
+  describe("logout", () => {
+    it("should successfully logout a user", async () => {
+      const result = await authService.logout("mock.jwt.token");
+      expect(result).toEqual({
+        success: true,
+        message: "Logout successful",
+      });
     });
   });
 });

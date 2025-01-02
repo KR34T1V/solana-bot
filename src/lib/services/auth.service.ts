@@ -1,24 +1,20 @@
-import type { PrismaClient, User } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
-import type {
-  AuthResponse,
-  LoginCredentials,
-  RegistrationData,
-} from "$lib/types/auth";
-import { ValidationError, AuthenticationError } from "$lib/utils/errors";
 import { generateToken } from "$lib/utils/jwt";
+import type { LoginCredentials, RegistrationData } from "$lib/types/auth";
+import { AuthenticationError, ValidationError } from "$lib/utils/errors";
 
 export class AuthService {
   constructor(private prisma: PrismaClient) {}
 
-  async register(data: RegistrationData): Promise<AuthResponse> {
-    // Check if user exists
+  async register(data: RegistrationData) {
+    // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existingUser) {
-      throw new ValidationError("Registration failed", {
+      throw new ValidationError("Email already exists", {
         email: ["Email already exists"],
       });
     }
@@ -31,6 +27,9 @@ export class AuthService {
       data: {
         email: data.email,
         password: hashedPassword,
+        loginAttempts: 0,
+        lastLoginAt: null,
+        lockedUntil: null,
       },
     });
 
@@ -40,8 +39,8 @@ export class AuthService {
     // Create session
     await this.prisma.session.create({
       data: {
-        userId: user.id,
         token,
+        userId: user.id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
@@ -50,13 +49,16 @@ export class AuthService {
       success: true,
       message: "Registration successful",
       data: {
-        user: this.sanitizeUser(user),
+        user: {
+          id: user.id,
+          email: user.email,
+        },
         token,
       },
     };
   }
 
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
+  async login(credentials: LoginCredentials) {
     // Find user
     const user = await this.prisma.user.findUnique({
       where: { email: credentials.email },
@@ -69,7 +71,7 @@ export class AuthService {
     // Check if account is locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new AuthenticationError(
-        `Account is locked. Try again after ${user.lockedUntil.toLocaleString()}`,
+        `Account is locked. Please try again after ${user.lockedUntil.toLocaleString()}`,
       );
     }
 
@@ -81,18 +83,17 @@ export class AuthService {
 
     if (!isValidPassword) {
       // Increment login attempts
-      const loginAttempts = user.loginAttempts + 1;
-      const updates = {
-        loginAttempts,
-        ...(loginAttempts >= 5 && {
-          lockedUntil: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
-          loginAttempts: 0,
-        }),
-      };
+      const loginAttempts = (user.loginAttempts || 0) + 1;
 
+      // Lock account after 5 failed attempts
       await this.prisma.user.update({
         where: { id: user.id },
-        data: updates,
+        data: {
+          loginAttempts,
+          ...(loginAttempts >= 5 && {
+            lockedUntil: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+          }),
+        },
       });
 
       throw new AuthenticationError("Invalid email or password");
@@ -103,6 +104,7 @@ export class AuthService {
       where: { id: user.id },
       data: {
         loginAttempts: 0,
+        lockedUntil: null,
         lastLoginAt: new Date(),
       },
     });
@@ -113,8 +115,8 @@ export class AuthService {
     // Create session
     await this.prisma.session.create({
       data: {
-        userId: user.id,
         token,
+        userId: user.id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
@@ -123,13 +125,16 @@ export class AuthService {
       success: true,
       message: "Login successful",
       data: {
-        user: this.sanitizeUser(user),
+        user: {
+          id: user.id,
+          email: user.email,
+        },
         token,
       },
     };
   }
 
-  async logout(userId: string): Promise<AuthResponse> {
+  async logout(userId: string) {
     // Delete all sessions for user
     await this.prisma.session.deleteMany({
       where: { userId },
@@ -139,11 +144,5 @@ export class AuthService {
       success: true,
       message: "Logout successful",
     };
-  }
-
-  private sanitizeUser(user: User): Omit<User, "password"> {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...safeUser } = user;
-    return safeUser;
   }
 }

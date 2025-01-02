@@ -1,38 +1,30 @@
-export class AppError extends Error {
+export class ValidationError extends Error {
   constructor(
     message: string,
-    public code: string,
-    public statusCode: number = 500,
+    public errors?: Record<string, string[]>,
   ) {
     super(message);
-    this.name = this.constructor.name;
-    Error.captureStackTrace(this, this.constructor);
+    this.name = "ValidationError";
   }
 }
 
-export class ValidationError extends AppError {
-  constructor(
-    message: string,
-    public errors: Record<string, string[]>,
-  ) {
-    super(message, "VALIDATION_ERROR", 400);
-  }
-}
-
-export class AuthenticationError extends AppError {
+export class AuthenticationError extends Error {
   constructor(message: string) {
-    super(message, "AUTHENTICATION_ERROR", 401);
+    super(message);
+    this.name = "AuthenticationError";
   }
 }
 
-export class AuthorizationError extends AppError {
+export class AuthorizationError extends Error {
   constructor(message: string) {
-    super(message, "AUTHORIZATION_ERROR", 403);
+    super(message);
+    this.name = "AuthorizationError";
   }
 }
 
-export class NotFoundError extends AppError {
+export class NotFoundError extends Error {
   constructor(message: string) {
-    super(message, "NOT_FOUND", 404);
+    super(message);
+    this.name = "NotFoundError";
   }
 }

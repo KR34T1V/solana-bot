@@ -10,12 +10,7 @@
     "sourceMap": true,
     "strict": true,
     "moduleResolution": "bundler",
-    "target": "ES2020",
-    "paths": {
-      "$lib/*": ["./src/lib/*"],
-      "$tests/*": ["./src/tests/*"],
-      "$env/*": ["./src/env/*"]
-    }
+    "target": "ES2020"
   },
   "include": [
     "src/**/*.d.ts",

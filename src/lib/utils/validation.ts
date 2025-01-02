@@ -1,17 +1,16 @@
 import { z } from "zod";
 
-export const emailSchema = z
+const emailSchema = z
   .string()
-  .email("Invalid email address")
+  .email("Invalid email format")
   .min(1, "Email is required");
 
-export const passwordSchema = z
+const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")
-  .max(100, "Password must be less than 100 characters")
   .regex(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{8,}$/,
-    "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/,
+    "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
   );
 
 export const loginSchema = z.object({

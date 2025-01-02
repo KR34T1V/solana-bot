@@ -1,25 +1,25 @@
-// This is your Prisma schema file
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
   password      String
-  lastLoginAt   DateTime?
   loginAttempts Int       @default(0)
   lockedUntil   DateTime?
+  lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
-
-  @@map("users")
 }
 
 model Session {
@@ -30,6 +30,4 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@map("sessions")
 } 
