@@ -1,39 +1,45 @@
 /**
- * @file Test script for Jupiter provider
+ * @file Jupiter Provider Test Script
  * @version 1.0.0
+ * @description Test script for Jupiter provider implementation
  */
 
-import { JupiterProvider } from "../services/providers/jupiter.provider";
-import { logger } from "../services/logging.service";
+import { Connection } from "@solana/web3.js";
+import { ProviderFactory, ProviderType } from "../services/providers/provider.factory";
+import { ManagedLoggingService } from "../services/core/managed-logging";
+import type { ManagedProviderBase } from "../services/providers/base.provider";
 
 async function main() {
-  const provider = new JupiterProvider();
+  const logger = new ManagedLoggingService({
+    logDir: "./logs",
+    level: "info",
+    serviceName: "test-logger",
+  });
 
-  // Common token mints for testing
-  const tokens = {
-    SOL: "So11111111111111111111111111111111111111112",
-    USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    BONK: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
-  };
+  await logger.start();
 
-  for (const [symbol, mint] of Object.entries(tokens)) {
-    try {
-      logger.info(`Fetching ${symbol} price...`, { symbol, mint });
-      const price = await provider.getPrice(mint);
-      logger.info(`${symbol} Price:`, { symbol, mint, ...price });
-    } catch (error) {
-      logger.error(`Error fetching ${symbol} price:`, {
-        symbol,
-        mint,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
+  const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+  const provider = ProviderFactory.getProvider(
+    ProviderType.JUPITER,
+    logger,
+    connection,
+  ) as ManagedProviderBase;
+
+  await provider.start();
+
+  try {
+    const price = await provider.getPrice("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"); // USDC
+    console.log("USDC Price:", price);
+
+    const orderBook = await provider.getOrderBook("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    console.log("USDC Order Book:", orderBook);
+  } catch (error) {
+    console.error("Error:", error);
+  } finally {
+    await provider.stop();
+    await logger.stop();
   }
 }
 
-main().catch((error) => {
-  logger.error("Script failed:", {
-    error: error instanceof Error ? error.message : "Unknown error",
-  });
-  process.exit(1);
-});
+main().catch(console.error);

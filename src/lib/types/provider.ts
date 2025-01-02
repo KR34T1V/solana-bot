@@ -1,6 +1,7 @@
 /**
- * @file Base interfaces for market data providers
+ * @file Provider Type Definitions
  * @version 1.0.0
+ * @description Type definitions for market data providers
  */
 
 export interface PriceData {
@@ -19,30 +20,38 @@ export interface OHLCVData {
 }
 
 export interface MarketDepth {
-  bids: Array<readonly [number, number]>;
-  asks: Array<readonly [number, number]>;
+  bids: Array<[number, number]>; // [price, size]
+  asks: Array<[number, number]>; // [price, size]
   timestamp: number;
+}
+
+export interface ProviderCapabilities {
+  canGetPrice: boolean;
+  canGetOHLCV: boolean;
+  canGetOrderBook: boolean;
 }
 
 export interface BaseProvider {
   /**
    * Get current price for a token
-   * @param tokenMint The token's mint address
+   * @throws {Error} If price data is not available
    */
   getPrice(tokenMint: string): Promise<PriceData>;
 
   /**
-   * Get historical OHLCV data
-   * @param tokenMint The token's mint address
-   * @param timeframe Timeframe in minutes
-   * @param limit Number of candles to return
+   * Get OHLCV data for a token
+   * @throws {Error} If OHLCV data is not available
    */
-  getOHLCV(tokenMint: string, timeframe: number, limit: number): Promise<never>;
+  getOHLCV(tokenMint: string, timeframe: number, limit: number): Promise<OHLCVData>;
 
   /**
-   * Get order book data
-   * @param tokenMint The token's mint address
-   * @param limit Depth of the order book
+   * Get order book data for a token
+   * @throws {Error} If order book data is not available
    */
   getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth>;
+
+  /**
+   * Get provider capabilities
+   */
+  getCapabilities(): ProviderCapabilities;
 }

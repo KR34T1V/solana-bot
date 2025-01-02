@@ -1,43 +1,63 @@
 /**
- * @file Market data provider factory
+ * @file Provider Factory Implementation
  * @version 1.0.0
+ * @description Factory for creating and managing market data providers
  */
 
-import type { BaseProvider } from "$lib/types/provider";
+import type { Connection } from "@solana/web3.js";
+import type { ManagedLoggingService } from "../core/managed-logging";
+import type { BaseProvider } from "../../types/provider";
 import { JupiterProvider } from "./jupiter.provider";
+import { RaydiumProvider } from "./raydium.provider";
 
 export enum ProviderType {
   JUPITER = "jupiter",
-  // Add more providers as they are implemented
-  // BIRDEYE = 'birdeye',
-  // RAYDIUM = 'raydium',
+  RAYDIUM = "raydium",
 }
 
 export class ProviderFactory {
-  private static providers: Map<ProviderType, BaseProvider> = new Map();
+  private static providers = new Map<string, BaseProvider>();
 
-  static getProvider(type: ProviderType): BaseProvider {
-    let provider = this.providers.get(type);
-
-    if (!provider) {
-      provider = ProviderFactory.createProvider(type);
-      this.providers.set(type, provider);
+  static getProvider(
+    type: ProviderType,
+    logger: ManagedLoggingService,
+    connection: Connection,
+  ): BaseProvider {
+    const key = `${type}`;
+    if (this.providers.has(key)) {
+      return this.providers.get(key)!;
     }
 
-    return provider;
-  }
+    let provider: BaseProvider;
 
-  private static createProvider(type: ProviderType): BaseProvider {
     switch (type) {
       case ProviderType.JUPITER:
-        return new JupiterProvider();
-      default:
-        throw new Error(`Unsupported provider type: ${type}`);
-    }
-  }
+        provider = new JupiterProvider(
+          {
+            name: "jupiter-provider",
+            version: "1.0.0",
+          },
+          logger,
+          connection,
+        );
+        break;
 
-  // Clear provider instances (useful for testing)
-  static clearProviders(): void {
-    this.providers.clear();
+      case ProviderType.RAYDIUM:
+        provider = new RaydiumProvider(
+          {
+            name: "raydium-provider",
+            version: "1.0.0",
+          },
+          logger,
+          connection,
+        );
+        break;
+
+      default:
+        throw new Error(`Unknown provider type: ${type}`);
+    }
+
+    this.providers.set(key, provider);
+    return provider;
   }
 }
