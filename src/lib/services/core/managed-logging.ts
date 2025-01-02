@@ -6,8 +6,8 @@
 
 import winston from "winston";
 import { join } from "path";
-import type { Service } from "./service.manager";
-import { ServiceStatus } from "./service.manager";
+import type { Service } from "../interfaces/service";
+import { ServiceStatus } from "../core/service.manager";
 
 // Standard metadata interface
 type BaseMetadata = Record<string, unknown> & {
@@ -82,6 +82,14 @@ export class ManagedLoggingService implements Service {
 
   async start(): Promise<void> {
     try {
+      if (this.serviceStatus === ServiceStatus.RUNNING) {
+        throw new Error("Service is already running");
+      }
+
+      if (this.serviceStatus === ServiceStatus.STARTING) {
+        throw new Error("Service is already starting");
+      }
+
       this.serviceStatus = ServiceStatus.STARTING;
 
       // Create logger instance with configuration
@@ -137,6 +145,14 @@ export class ManagedLoggingService implements Service {
 
   async stop(): Promise<void> {
     try {
+      if (this.serviceStatus === ServiceStatus.STOPPED) {
+        throw new Error("Service is already stopped");
+      }
+
+      if (this.serviceStatus === ServiceStatus.STOPPING) {
+        throw new Error("Service is already stopping");
+      }
+
       this.serviceStatus = ServiceStatus.STOPPING;
 
       // Log stopping message before closing
@@ -195,6 +211,17 @@ export class ManagedLoggingService implements Service {
     this.logger.debug(message, this.enrichMetadata(meta || {}));
   }
 
+  // Error logging method
+  logError(error: Error, context?: Record<string, unknown>) {
+    if (!this.canLog()) return;
+    const metadata = this.enrichMetadata({
+      ...context,
+      stack: error.stack,
+      type: "ERROR",
+    });
+    this.error(error.message, metadata);
+  }
+
   // Auth specific logging methods
   logAuthAttempt(data: Omit<AuthMetadata, "type" | "timestamp">) {
     if (!this.canLog()) return;
@@ -251,17 +278,7 @@ export class ManagedLoggingService implements Service {
       ...data,
       type: "STRATEGY_SIGNAL",
     });
-    this.debug("Strategy signal generated", metadata);
-  }
-
-  logError(error: Error, context?: Record<string, unknown>) {
-    if (!this.canLog()) return;
-    const metadata = this.enrichMetadata({
-      ...context,
-      stack: error.stack,
-      type: "ERROR",
-    });
-    this.error(error.message, metadata);
+    this.info(`Strategy signal: ${data.signal}`, metadata);
   }
 
   // Method to test if logging is properly configured
