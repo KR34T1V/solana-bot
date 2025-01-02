@@ -23,7 +23,8 @@
     "test:coverage": "mkdir -p coverage && vitest run --coverage",
     "test:e2e": "playwright test",
     "prepare": "husky install",
-    "check:all": "yarn lint && yarn type-check && yarn test"
+    "check:all": "yarn lint && yarn type-check && yarn test",
+    "script": "vite-node"
   },
   "lint-staged": {
     "*.{js,ts,svelte}": [
@@ -45,6 +46,7 @@
     "@prisma/client": "^5.7.0",
     "@solana/web3.js": "^1.87.6",
     "@sveltejs/kit": "^2.0.0",
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "chart.js": "^4.4.1",
     "date-fns": "^4.1.0",
