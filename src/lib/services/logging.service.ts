@@ -5,6 +5,45 @@ const LOG_DIR = "logs";
 const MAX_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 const MAX_FILES = 14; // 14 days worth of files
 
+// Standard metadata interface
+type BaseMetadata = Record<string, unknown> & {
+  type: string;
+  timestamp?: Date;
+  userId?: string;
+  requestId?: string;
+  ip?: string;
+};
+
+type AuthAction =
+  | "register"
+  | "login"
+  | "logout"
+  | "session_create"
+  | "session_delete"
+  | "account_lock";
+
+type AuthMetadata = BaseMetadata & {
+  email?: string;
+  action: AuthAction;
+  failureReason?: string;
+  loginAttempts?: number;
+  lockedUntil?: Date;
+};
+
+type TradeMetadata = BaseMetadata & {
+  strategy: string;
+  action: "BUY" | "SELL";
+  token: string;
+  amount: number;
+  price: number;
+};
+
+type SignalMetadata = BaseMetadata & {
+  strategy: string;
+  signal: string;
+  indicators: Record<string, number>;
+};
+
 class LoggingService {
   private logger: winston.Logger;
 
@@ -49,52 +88,93 @@ class LoggingService {
     }
   }
 
+  private enrichMetadata<T extends Record<string, unknown>>(
+    meta: T,
+  ): T & { timestamp: Date } {
+    const timestamp =
+      meta.timestamp instanceof Date ? meta.timestamp : new Date();
+    return {
+      ...meta,
+      timestamp,
+    };
+  }
+
   error(message: string, meta?: Record<string, unknown>) {
-    this.logger.error(message, meta);
+    this.logger.error(message, this.enrichMetadata(meta || {}));
   }
 
   warn(message: string, meta?: Record<string, unknown>) {
-    this.logger.warn(message, meta);
+    this.logger.warn(message, this.enrichMetadata(meta || {}));
   }
 
   info(message: string, meta?: Record<string, unknown>) {
-    this.logger.info(message, meta);
+    this.logger.info(message, this.enrichMetadata(meta || {}));
   }
 
   debug(message: string, meta?: Record<string, unknown>) {
-    this.logger.debug(message, meta);
+    this.logger.debug(message, this.enrichMetadata(meta || {}));
+  }
+
+  // Auth specific logging methods
+  logAuthAttempt(data: Omit<AuthMetadata, "type" | "timestamp">) {
+    const metadata = this.enrichMetadata({
+      ...data,
+      type: "AUTH_ATTEMPT",
+    });
+    this.info(`Authentication attempt: ${data.action}`, metadata);
+  }
+
+  logAuthSuccess(
+    data: Omit<AuthMetadata, "type" | "timestamp" | "failureReason">,
+  ) {
+    const metadata = this.enrichMetadata({
+      ...data,
+      type: "AUTH_SUCCESS",
+    });
+    this.info(`Authentication successful: ${data.action}`, metadata);
+  }
+
+  logAuthFailure(data: Omit<AuthMetadata, "type" | "timestamp">) {
+    const metadata = this.enrichMetadata({
+      ...data,
+      type: "AUTH_FAILURE",
+    });
+    this.error(`Authentication failed: ${data.action}`, metadata);
+  }
+
+  logAccountLock(data: Omit<AuthMetadata, "type" | "timestamp" | "action">) {
+    const metadata = this.enrichMetadata({
+      ...data,
+      action: "account_lock" as AuthAction,
+      type: "ACCOUNT_LOCK",
+    });
+    this.warn("Account locked", metadata);
   }
 
   // Trading specific logging methods
-  logTradeExecution(data: {
-    strategy: string;
-    action: "BUY" | "SELL";
-    token: string;
-    amount: number;
-    price: number;
-    timestamp: Date;
-  }) {
-    this.info("Trade executed", { ...data, type: "TRADE_EXECUTION" });
+  logTradeExecution(data: Omit<TradeMetadata, "type" | "timestamp">) {
+    const metadata = this.enrichMetadata({
+      ...data,
+      type: "TRADE_EXECUTION",
+    });
+    this.info("Trade executed", metadata);
   }
 
-  logStrategySignal(data: {
-    strategy: string;
-    signal: string;
-    indicators: Record<string, number>;
-    timestamp: Date;
-  }) {
-    this.debug("Strategy signal generated", {
+  logStrategySignal(data: Omit<SignalMetadata, "type" | "timestamp">) {
+    const metadata = this.enrichMetadata({
       ...data,
       type: "STRATEGY_SIGNAL",
     });
+    this.debug("Strategy signal generated", metadata);
   }
 
   logError(error: Error, context?: Record<string, unknown>) {
-    this.error(error.message, {
+    const metadata = this.enrichMetadata({
       ...context,
       stack: error.stack,
       type: "ERROR",
     });
+    this.error(error.message, metadata);
   }
 
   // Method to test if logging is properly configured
