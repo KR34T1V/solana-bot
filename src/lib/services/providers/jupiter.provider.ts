@@ -6,7 +6,11 @@
 
 import axios from "axios";
 import type { AxiosInstance, AxiosError } from "axios";
-import type { BaseProvider, PriceData } from "../../types/provider";
+import type {
+  BaseProvider,
+  PriceData,
+  MarketDepth,
+} from "../../types/provider";
 import { logger } from "../logging.service";
 
 interface JupiterPriceResponse {
@@ -173,5 +177,9 @@ export class JupiterProvider implements BaseProvider {
     _limit: number,
   ): Promise<never> {
     throw new Error("OHLCV data not available through Jupiter API");
+  }
+
+  async getOrderBook(_tokenMint: string, _limit = 100): Promise<MarketDepth> {
+    throw new Error("Order book data not available through Jupiter");
   }
 }

@@ -6,7 +6,7 @@
 export interface PriceData {
   price: number;
   timestamp: number;
-  confidence?: number;
+  confidence: number;
 }
 
 export interface OHLCVData {
@@ -19,8 +19,8 @@ export interface OHLCVData {
 }
 
 export interface MarketDepth {
-  bids: [price: number, size: number][];
-  asks: [price: number, size: number][];
+  bids: Array<readonly [number, number]>;
+  asks: Array<readonly [number, number]>;
   timestamp: number;
 }
 
@@ -37,16 +37,12 @@ export interface BaseProvider {
    * @param timeframe Timeframe in minutes
    * @param limit Number of candles to return
    */
-  getOHLCV(
-    tokenMint: string,
-    timeframe: number,
-    limit: number,
-  ): Promise<OHLCVData[]>;
+  getOHLCV(tokenMint: string, timeframe: number, limit: number): Promise<never>;
 
   /**
    * Get order book data
    * @param tokenMint The token's mint address
    * @param limit Depth of the order book
    */
-  getOrderBook?(tokenMint: string, limit?: number): Promise<MarketDepth>;
+  getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth>;
 }

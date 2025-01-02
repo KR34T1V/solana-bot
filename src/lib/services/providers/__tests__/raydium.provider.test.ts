@@ -8,6 +8,7 @@ import {
   type Percent,
   type CurrencyAmount,
 } from "@raydium-io/raydium-sdk";
+import type { MarketDepth } from "$lib/types/provider";
 import axios, { type AxiosInstance } from "axios";
 
 // Mock external dependencies
@@ -353,6 +354,233 @@ describe("RaydiumProvider", () => {
       await expect(provider.getPrice(mockTokenMint)).rejects.toThrow(
         /Missing lookupTableAccount/,
       );
+    });
+  });
+
+  describe("transformPositionsToDepth", () => {
+    it("should transform position data into order book format", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        version: 3,
+      };
+
+      const mockPositions = {
+        positions: [
+          { price: 1.0, liquidity: 1000, baseAmount: 1000, quoteAmount: 1000 },
+          { price: 1.1, liquidity: 2000, baseAmount: 2000, quoteAmount: 2200 },
+          { price: 0.9, liquidity: 1500, baseAmount: 1500, quoteAmount: 1350 },
+          { price: 1.2, liquidity: 1800, baseAmount: 1800, quoteAmount: 2160 },
+        ],
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ data: [mockPool] })
+          .mockResolvedValueOnce({ data: mockPositions }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getOrderBook(mockTokenMint);
+
+      // Verify basic structure
+      expect(result.bids).toBeDefined();
+      expect(result.asks).toBeDefined();
+      expect(result.bids.length).toBeGreaterThan(0);
+      expect(result.asks.length).toBeGreaterThan(0);
+      expect(result.timestamp).toBeDefined();
+
+      // Verify each bid and ask has correct structure
+      result.bids.forEach((bid) => {
+        expect(Array.isArray(bid)).toBe(true);
+        expect(bid.length).toBe(2);
+        expect(typeof bid[0]).toBe("number");
+        expect(typeof bid[1]).toBe("number");
+      });
+
+      result.asks.forEach((ask) => {
+        expect(Array.isArray(ask)).toBe(true);
+        expect(ask.length).toBe(2);
+        expect(typeof ask[0]).toBe("number");
+        expect(typeof ask[1]).toBe("number");
+      });
+
+      // Verify ordering
+      const isSortedDescending = (arr: MarketDepth["bids"]) => {
+        for (let i = 1; i < arr.length; i++) {
+          if (arr[i][0] > arr[i - 1][0]) return false;
+        }
+        return true;
+      };
+
+      const isSortedAscending = (arr: MarketDepth["asks"]) => {
+        for (let i = 1; i < arr.length; i++) {
+          if (arr[i][0] < arr[i - 1][0]) return false;
+        }
+        return true;
+      };
+
+      expect(isSortedDescending(result.bids)).toBe(true);
+      expect(isSortedAscending(result.asks)).toBe(true);
+
+      // Verify spread
+      if (result.bids.length > 0 && result.asks.length > 0) {
+        expect(result.bids[0][0]).toBeLessThan(result.asks[0][0]);
+      }
+    });
+
+    it("should handle empty position data", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        version: 3,
+      };
+
+      const mockPositions = { positions: [] };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ data: [mockPool] })
+          .mockResolvedValueOnce({ data: mockPositions }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getOrderBook(mockTokenMint);
+      expect(result.bids).toHaveLength(0);
+      expect(result.asks).toHaveLength(0);
+    });
+  });
+
+  describe("pool caching", () => {
+    it("should cache pool data for 10 seconds", async () => {
+      const mockPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        baseReserve: 1000,
+        quoteReserve: 2000,
+        version: 3,
+      };
+
+      const mockApiCall = vi.fn().mockResolvedValue({ data: [mockPool] });
+      vi.mocked(axios.create).mockReturnValue({
+        get: mockApiCall,
+      } as unknown as AxiosInstance);
+
+      // First call should fetch data
+      await provider.getPrice(mockTokenMint);
+      expect(mockApiCall).toHaveBeenCalledTimes(1);
+
+      // Second immediate call should use cache
+      await provider.getPrice(mockTokenMint);
+      expect(mockApiCall).toHaveBeenCalledTimes(1);
+
+      // Advance time by 11 seconds
+      vi.advanceTimersByTime(11000);
+
+      // Call after cache expiry should fetch new data
+      await provider.getPrice(mockTokenMint);
+      expect(mockApiCall).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("price confidence calculation", () => {
+    it("should calculate higher confidence for balanced pools", async () => {
+      const balancedPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        baseReserve: 1000,
+        quoteReserve: 1000,
+        version: 3,
+      };
+
+      const unbalancedPool = {
+        id: "pool2",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        baseReserve: 1000,
+        quoteReserve: 10000,
+        version: 3,
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ data: [balancedPool] })
+          .mockResolvedValueOnce({ data: [unbalancedPool] }),
+      } as unknown as AxiosInstance);
+
+      const balancedResult = await provider.getPrice(mockTokenMint);
+      vi.clearAllMocks();
+      const unbalancedResult = await provider.getPrice(mockTokenMint);
+
+      expect(balancedResult.confidence).toBeGreaterThan(
+        unbalancedResult.confidence,
+      );
+    });
+
+    it("should cap confidence at 1.0", async () => {
+      const perfectPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        baseReserve: 1000,
+        quoteReserve: 1000,
+        version: 3,
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi.fn().mockResolvedValue({ data: [perfectPool] }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getPrice(mockTokenMint);
+      expect(result.confidence).toBeLessThanOrEqual(1.0);
+    });
+  });
+
+  describe("liquidity info edge cases", () => {
+    it("should handle zero liquidity pools", async () => {
+      const zeroLiquidityPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        baseReserve: 0,
+        quoteReserve: 0,
+        lpSupply: 0,
+        version: 3,
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi.fn().mockResolvedValue({ data: [zeroLiquidityPool] }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getLiquidityInfo(mockTokenMint);
+      expect(result).toBeDefined();
+      expect(result?.lpRatio).toBe(0);
+    });
+
+    it("should handle extremely imbalanced pools", async () => {
+      const imbalancedPool = {
+        id: "pool1",
+        baseMint: mockTokenMint,
+        quoteMint: "USDC",
+        baseReserve: 1,
+        quoteReserve: 1000000,
+        lpSupply: 1000,
+        version: 3,
+      };
+
+      vi.mocked(axios.create).mockReturnValue({
+        get: vi.fn().mockResolvedValue({ data: [imbalancedPool] }),
+      } as unknown as AxiosInstance);
+
+      const result = await provider.getLiquidityInfo(mockTokenMint);
+      expect(result).toBeDefined();
+      expect(result?.price).toBeGreaterThan(0);
+      expect(Number.isFinite(result?.lpRatio)).toBe(true);
     });
   });
 });
