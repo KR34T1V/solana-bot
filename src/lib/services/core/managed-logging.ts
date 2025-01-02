@@ -56,6 +56,8 @@ interface LoggingConfig {
   serviceName?: string;
 }
 
+const VALID_LOG_LEVELS = ["error", "warn", "info", "debug"];
+
 export class ManagedLoggingService implements Service {
   private logger: winston.Logger = winston.createLogger();
   private readonly config: LoggingConfig;
@@ -65,6 +67,16 @@ export class ManagedLoggingService implements Service {
   private readonly MAX_FILES: number;
 
   constructor(config: LoggingConfig = {}) {
+    // Validate log directory
+    if (config.logDir !== undefined && (!config.logDir || typeof config.logDir !== "string")) {
+      throw new Error("Invalid log directory");
+    }
+
+    // Validate log level
+    if (config.level && !VALID_LOG_LEVELS.includes(config.level)) {
+      throw new Error("Invalid log level");
+    }
+
     this.config = config;
     this.LOG_DIR = config.logDir || "logs";
     this.MAX_SIZE = config.maxSize || 20 * 1024 * 1024; // 20MB
@@ -155,9 +167,6 @@ export class ManagedLoggingService implements Service {
 
       this.serviceStatus = ServiceStatus.STOPPING;
 
-      // Log stopping message before closing
-      this.info("Logging service stopping");
-
       // Close all transports
       await new Promise<void>((resolve, reject) => {
         this.logger.on("finish", resolve);
@@ -184,11 +193,14 @@ export class ManagedLoggingService implements Service {
     };
   }
 
+  private validateRunning(operation: string): void {
+    if (this.serviceStatus !== ServiceStatus.RUNNING) {
+      throw new Error(`Service not running: cannot ${operation}`);
+    }
+  }
+
   private canLog(): boolean {
-    return (
-      this.serviceStatus === ServiceStatus.RUNNING ||
-      this.serviceStatus === ServiceStatus.STOPPING
-    );
+    return this.serviceStatus === ServiceStatus.RUNNING;
   }
 
   error(message: string, meta?: Record<string, unknown>) {

@@ -110,10 +110,7 @@ describe("ManagedLoggingService", () => {
       await loggingService.stop();
 
       expect(loggingService.getStatus()).toBe(ServiceStatus.STOPPED);
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        "Logging service stopping",
-        expect.any(Object),
-      );
+      expect(mockLogger.info).not.toHaveBeenCalled();
     });
 
     it("should handle start errors correctly", async () => {
