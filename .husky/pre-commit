@@ -4,12 +4,25 @@
 # Get the number of staged files (excluding deletions)
 staged_files=$(git diff --cached --name-only --diff-filter=ACMR | wc -l)
 
+# Function to run lint-staged with a specific config
+run_lint_staged() {
+  config=$1
+  echo "Running lint-staged with config: $config"
+  if ! yarn lint-staged --config "$config"; then
+    echo "❌ Lint-staged checks failed. Please fix the issues and try again."
+    exit 1
+  fi
+}
+
 # If there are too many files, skip running tests
 if [ "$staged_files" -gt 10 ]; then
-  echo "More than 10 files changed. Skipping test run in pre-commit hook."
-  echo "Running only linting and type checks."
-  yarn lint-staged --config .lintstagedrc.skip-tests.js
+  echo "⚠️  More than 10 files changed. Skipping test run in pre-commit hook."
+  echo "Running only linting and type checks..."
+  run_lint_staged ".lintstagedrc.skip-tests.js"
 else
-  echo "Running full pre-commit checks including tests..."
-  yarn lint-staged
-fi 
+  echo "🔍 Running full pre-commit checks including tests..."
+  run_lint_staged ".lintstagedrc.js"
+fi
+
+# Run git hooks in sequence
+echo "✅ Pre-commit checks completed successfully!" 
