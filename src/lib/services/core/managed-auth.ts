@@ -55,6 +55,10 @@ export class ManagedAuthService implements Service {
   }
 
   async start(): Promise<void> {
+    if (this.serviceStatus === ServiceStatus.RUNNING) {
+      throw new Error("Service is already running");
+    }
+
     try {
       this.serviceStatus = ServiceStatus.STARTING;
 
@@ -72,6 +76,10 @@ export class ManagedAuthService implements Service {
   }
 
   async stop(): Promise<void> {
+    if (this.serviceStatus === ServiceStatus.STOPPED) {
+      throw new Error("Service is already stopped");
+    }
+
     try {
       this.serviceStatus = ServiceStatus.STOPPING;
       this.config.logger.info("Auth service stopping");
