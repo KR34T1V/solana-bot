@@ -4,7 +4,7 @@
  * @description Manages service lifecycle and dependencies
  */
 
-import type { ManagedLoggingService } from "./managed-logging.service";
+import type { ManagedLoggingService } from "./managed-logging";
 
 export interface ServiceMetadata {
   name: string;

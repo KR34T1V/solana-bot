@@ -11,7 +11,7 @@ import type { LoginCredentials, RegistrationData } from "$lib/types/auth";
 import { AuthenticationError, ValidationError } from "$lib/utils/errors";
 import type { Service } from "./service.manager";
 import { ServiceStatus } from "./service.manager";
-import type { ManagedLoggingService } from "./managed-logging.service";
+import type { ManagedLoggingService } from "./managed-logging";
 
 interface AuthConfig {
   maxLoginAttempts: number;
