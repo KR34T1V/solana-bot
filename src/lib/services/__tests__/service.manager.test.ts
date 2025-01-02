@@ -9,8 +9,8 @@ import {
   ServiceManager,
   ServiceStatus,
   type Service,
-} from "../service.manager";
-import type { ManagedLoggingService } from "../managed-logging.service";
+} from "../core/service.manager";
+import type { ManagedLoggingService } from "../core/managed-logging";
 
 // Mock service implementation
 class MockService implements Service {

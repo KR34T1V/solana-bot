@@ -9,8 +9,8 @@ import type { KeyedAccountInfo } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { ProviderFactory, ProviderType } from "../providers/provider.factory";
 import { logger } from "../logging.service";
-import type { Service } from "../service.manager";
-import { ServiceStatus } from "../service.manager";
+import type { Service } from "../core/service.manager";
+import { ServiceStatus } from "../core/service.manager";
 import type {
   TokenValidation,
   EntryConditions,
@@ -500,5 +500,18 @@ export class ManagedTokenSniper implements Service {
       const duration = Date.now() - start;
       await this.recordLatency(duration);
     }
+  }
+
+  /**
+   * Handle errors in token analysis
+   */
+  private handleAnalysisError(error: Error, mint: string): void {
+    logger.error("Failed to analyze token:", {
+      error: error.message,
+      mint,
+    });
+    this.errorCount++;
+    this.lastError = Date.now();
+    this.checkCircuitBreaker();
   }
 }

@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ManagedAuthService } from "../managed-auth.service";
-import { ServiceStatus } from "../service.manager";
+import { ManagedAuthService } from "../core/managed-auth";
+import { ServiceStatus } from "../core/service.manager";
 import { AuthenticationError, ValidationError } from "$lib/utils/errors";
 import * as bcrypt from "bcryptjs";
 

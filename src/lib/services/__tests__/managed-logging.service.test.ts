@@ -5,8 +5,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import winston from "winston";
-import { ManagedLoggingService } from "../managed-logging.service";
-import { ServiceStatus } from "../service.manager";
+import { ManagedLoggingService } from "../core/managed-logging";
+import { ServiceStatus } from "../core/service.manager";
 
 // Mock winston
 vi.mock("winston", () => {
