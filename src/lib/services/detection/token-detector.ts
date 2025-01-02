@@ -349,23 +349,23 @@ export class TokenDetector extends EventEmitter {
   }
 
   // Type-safe event emitter methods
-  on<E extends keyof TokenDetectorEvents>(
-    event: E,
-    listener: TokenDetectorEvents[E],
+  override on<K extends keyof TokenDetectorEvents>(
+    event: K,
+    listener: TokenDetectorEvents[K],
   ): this {
     return super.on(event, listener);
   }
 
-  once<E extends keyof TokenDetectorEvents>(
-    event: E,
-    listener: TokenDetectorEvents[E],
+  override off<K extends keyof TokenDetectorEvents>(
+    event: K,
+    listener: TokenDetectorEvents[K],
   ): this {
-    return super.once(event, listener);
+    return super.off(event, listener);
   }
 
-  emit<E extends keyof TokenDetectorEvents>(
-    event: E,
-    ...args: Parameters<TokenDetectorEvents[E]>
+  override emit<K extends keyof TokenDetectorEvents>(
+    event: K,
+    ...args: Parameters<TokenDetectorEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
   }

@@ -11,7 +11,7 @@ import {
   ProviderFactory,
   ProviderType,
 } from "../../providers/provider.factory";
-import { logger } from "../../logging.service";
+import { ManagedLoggingService } from "../../core/managed-logging";
 import type { Service } from "../../core/service.manager";
 import { ServiceStatus } from "../../core/service.manager";
 import type {
@@ -31,9 +31,8 @@ export class ManagedTokenSniper implements Service {
   private status: ServiceStatus = ServiceStatus.PENDING;
   private config: SniperConfig;
   private connection: Connection;
-  private provider: BaseProvider = ProviderFactory.getProvider(
-    ProviderType.JUPITER,
-  );
+  private provider: BaseProvider;
+  private logger: ManagedLoggingService;
   private subscriptionId?: number;
   private detectedTokens: Set<string> = new Set();
   private trades: TradeRecord[] = [];
@@ -43,10 +42,19 @@ export class ManagedTokenSniper implements Service {
   private startTime = 0;
   private isPaused = false;
 
-  constructor(config: SniperConfig, connection?: Connection) {
+  constructor(config: SniperConfig) {
     this.config = config;
-    this.connection =
-      connection || new Connection(process.env.RPC_ENDPOINT || "");
+    this.connection = new Connection(process.env.RPC_ENDPOINT || "");
+    this.logger = new ManagedLoggingService({
+      serviceName: "token-sniper",
+      level: "info",
+      logDir: "./logs",
+    });
+    this.provider = ProviderFactory.getProvider(
+      ProviderType.JUPITER,
+      this.logger,
+      this.connection,
+    );
   }
 
   getName(): string {
@@ -59,9 +67,10 @@ export class ManagedTokenSniper implements Service {
 
   async start(): Promise<void> {
     try {
+      await this.logger.start();
       this.startTime = Date.now();
       this.status = ServiceStatus.STARTING;
-      logger.info("Starting token monitoring...");
+      this.logger.info("Starting token monitoring...");
 
       // Subscribe to new token mints
       this.subscriptionId = this.connection.onProgramAccountChange(
@@ -72,7 +81,7 @@ export class ManagedTokenSniper implements Service {
       this.status = ServiceStatus.RUNNING;
     } catch (error) {
       this.status = ServiceStatus.ERROR;
-      logger.error("Failed to start token sniper:", { error });
+      this.logger.error("Failed to start token sniper:", { error });
       throw error;
     }
   }
@@ -88,11 +97,12 @@ export class ManagedTokenSniper implements Service {
         );
       }
 
+      await this.logger.stop();
       this.status = ServiceStatus.STOPPED;
-      logger.info("Token sniper stopped");
+      this.logger.info("Token sniper stopped");
     } catch (error) {
       this.status = ServiceStatus.ERROR;
-      logger.error("Failed to stop token sniper:", { error });
+      this.logger.error("Failed to stop token sniper:", { error });
       throw error;
     }
   }
@@ -162,7 +172,7 @@ export class ManagedTokenSniper implements Service {
       if (!tokenData) return;
 
       this.detectedTokens.add(tokenData.mint);
-      logger.info("New token detected", { mint: tokenData.mint });
+      this.logger.info("New token detected", { mint: tokenData.mint });
 
       const safetyScore = await this.performInitialSafetyChecks(tokenData);
       const creatorScore = await this.analyzeCreatorWallet(tokenData.creator);
@@ -199,7 +209,9 @@ export class ManagedTokenSniper implements Service {
 
     // Pause if latency is too high
     if (duration > 500) {
-      logger.warn("System paused due to high latency", { latency: duration });
+      this.logger.warn("System paused due to high latency", {
+        latency: duration,
+      });
       this.isPaused = true;
       this.status = ServiceStatus.STOPPED;
     }
@@ -216,7 +228,7 @@ export class ManagedTokenSniper implements Service {
     }
 
     if (this.errorCount >= MAX_ERRORS) {
-      logger.error("Circuit breaker triggered due to high error rate");
+      this.logger.error("Circuit breaker triggered due to high error rate");
       this.status = ServiceStatus.ERROR;
     }
   }
@@ -243,7 +255,7 @@ export class ManagedTokenSniper implements Service {
         },
       };
     } catch (error) {
-      logger.error("Failed to validate token creation:", { error });
+      this.logger.error("Failed to validate token creation:", { error });
       return null;
     }
   }
@@ -269,7 +281,7 @@ export class ManagedTokenSniper implements Service {
         },
       };
     } catch (error) {
-      logger.error("Failed to perform safety checks:", { error });
+      this.logger.error("Failed to perform safety checks:", { error });
       throw error;
     }
   }
@@ -309,7 +321,7 @@ export class ManagedTokenSniper implements Service {
         },
       };
     } catch (error) {
-      logger.error("Failed to monitor liquidity:", { error });
+      this.logger.error("Failed to monitor liquidity:", { error });
       return null;
     }
   }
@@ -329,7 +341,7 @@ export class ManagedTokenSniper implements Service {
 
       return isCreatorTrusted && isSafe && hasLiquidity;
     } catch (error) {
-      logger.error("Failed to validate entry conditions:", { error });
+      this.logger.error("Failed to validate entry conditions:", { error });
       return false;
     }
   }
@@ -352,17 +364,17 @@ export class ManagedTokenSniper implements Service {
         },
       };
     } catch (error) {
-      logger.error("Failed to analyze creator:", { error });
+      this.logger.error("Failed to analyze creator:", { error });
       throw error;
     }
   }
 
   private async prepareEntry(mint: string): Promise<void> {
-    logger.info("Preparing entry", { mint });
+    this.logger.info("Preparing entry", { mint });
   }
 
   private async executeEntry(analysis: TokenAnalysis): Promise<void> {
-    logger.info("Executing entry", { analysis });
+    this.logger.info("Executing entry", { analysis });
   }
 
   private async analyzeOpportunity(mint: string): Promise<TokenAnalysis> {
@@ -397,7 +409,7 @@ export class ManagedTokenSniper implements Service {
   }
 
   private handleAnalysisError(error: Error, mint: string): void {
-    logger.error("Failed to analyze token:", {
+    this.logger.error("Failed to analyze token:", {
       error: error.message,
       mint,
     });

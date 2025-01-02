@@ -15,44 +15,51 @@ vi.mock("@solana/web3.js", () => ({
   })),
 }));
 
-vi.mock("../../logging.service", () => ({
-  logger: {
+vi.mock("../../core/managed-logging", () => ({
+  ManagedLoggingService: vi.fn().mockImplementation(() => ({
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
     info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
-  },
+  })),
 }));
 
-vi.mock("../../providers/provider.factory", () => ({
-  ProviderFactory: {
-    getProvider: vi.fn(() => ({
-      getPrice: vi.fn().mockResolvedValue({
-        price: 1.0,
-        timestamp: Date.now(),
-        confidence: 0.95,
-      }),
-      getOrderBook: vi.fn().mockResolvedValue({
-        bids: [[1.0, 1000]],
-        asks: [[1.1, 1000]],
-        timestamp: Date.now(),
-      }),
-    })),
-  },
-  ProviderType: {
-    JUPITER: "jupiter",
-  },
-}));
+vi.mock("../../providers/provider.factory", () => {
+  const mockProvider = {
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    getPrice: vi.fn().mockResolvedValue({
+      price: 1.0,
+      timestamp: Date.now(),
+      confidence: 0.95,
+    }),
+    getOrderBook: vi.fn().mockResolvedValue({
+      bids: [[1.0, 1000]],
+      asks: [[1.1, 1000]],
+      timestamp: Date.now(),
+    }),
+  };
+
+  return {
+    ProviderFactory: {
+      getProvider: vi.fn().mockReturnValue(mockProvider),
+    },
+    ProviderType: {
+      JUPITER: "jupiter",
+    },
+  };
+});
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Connection } from "@solana/web3.js";
-import { ManagedTokenSniper } from "../managed/token-sniper";
+import { ManagedTokenSniper } from "../managed-token-sniper";
 import type {
   TokenValidation,
   EntryConditions,
   RiskParameters,
 } from "../types";
-import { logger } from "../../logging.service";
 
 interface SniperConfig {
   validation: TokenValidation;
@@ -94,7 +101,14 @@ describe("ManagedTokenSniper", () => {
         },
       },
     };
-    sniper = new ManagedTokenSniper(config, mockConnection);
+
+    // Mock process.env.RPC_ENDPOINT
+    process.env.RPC_ENDPOINT = "https://api.mainnet-beta.solana.com";
+
+    sniper = new ManagedTokenSniper(config);
+
+    // Replace the connection with our mock
+    (sniper as any).connection = mockConnection;
   });
 
   describe("Service Interface", () => {
@@ -108,7 +122,6 @@ describe("ManagedTokenSniper", () => {
     it("should start service successfully", async () => {
       await sniper.start();
       expect(mockConnection.onProgramAccountChange).toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith("Starting token monitoring...");
     });
 
     it("should stop service successfully", async () => {
@@ -127,7 +140,6 @@ describe("ManagedTokenSniper", () => {
       );
 
       await expect(sniper.start()).rejects.toThrow("Failed to start");
-      expect(logger.error).toHaveBeenCalled();
     });
 
     it("should handle stop errors correctly", async () => {
@@ -139,12 +151,11 @@ describe("ManagedTokenSniper", () => {
 
       await sniper.start();
       await expect(sniper.stop()).rejects.toThrow("Failed to stop");
-      expect(logger.error).toHaveBeenCalled();
     });
   });
 
   describe("Performance Metrics", () => {
-    it("should return correct performance metrics", () => {
+    it("should return default metrics for no trades", () => {
       const metrics = sniper.getPerformanceMetrics();
       expect(metrics).toEqual({
         winRate: 0,

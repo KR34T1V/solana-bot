@@ -328,23 +328,23 @@ export class LiquidityAnalyzer extends EventEmitter {
   }
 
   // Type-safe event emitter methods
-  on<E extends keyof LiquidityAnalyzerEvents>(
-    event: E,
-    listener: LiquidityAnalyzerEvents[E],
+  override on<K extends keyof LiquidityAnalyzerEvents>(
+    event: K,
+    listener: LiquidityAnalyzerEvents[K],
   ): this {
     return super.on(event, listener);
   }
 
-  once<E extends keyof LiquidityAnalyzerEvents>(
-    event: E,
-    listener: LiquidityAnalyzerEvents[E],
+  override off<K extends keyof LiquidityAnalyzerEvents>(
+    event: K,
+    listener: LiquidityAnalyzerEvents[K],
   ): this {
-    return super.once(event, listener);
+    return super.off(event, listener);
   }
 
-  emit<E extends keyof LiquidityAnalyzerEvents>(
-    event: E,
-    ...args: Parameters<LiquidityAnalyzerEvents[E]>
+  override emit<K extends keyof LiquidityAnalyzerEvents>(
+    event: K,
+    ...args: Parameters<LiquidityAnalyzerEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
   }
