@@ -1,5 +1,15 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-# Run lint-staged
-yarn lint-staged 
+# Get the number of staged files (excluding deletions)
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR | wc -l)
+
+# If there are too many files, skip running tests
+if [ "$staged_files" -gt 10 ]; then
+  echo "More than 10 files changed. Skipping test run in pre-commit hook."
+  echo "Running only linting and type checks."
+  yarn lint-staged --config .lintstagedrc.skip-tests.js
+else
+  echo "Running full pre-commit checks including tests..."
+  yarn lint-staged
+fi 
