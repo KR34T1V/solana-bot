@@ -9,7 +9,13 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "paths": {
+      "$lib/*": ["./src/lib/*"],
+      "$tests/*": ["./src/tests/*"],
+      "$env/*": ["./src/env/*"]
+    }
   },
   "include": [
     "src/**/*.d.ts",

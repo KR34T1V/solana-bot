@@ -11,13 +11,20 @@ vi.mock("$env/static/private", () => ({
 vi.mock("@prisma/client", () => ({
   PrismaClient: vi.fn(() => ({
     user: {
-      create: vi.fn(),
-      findUnique: vi.fn(),
-      update: vi.fn(),
+      create: vi.fn().mockResolvedValue(mockUser),
+      findUnique: vi.fn().mockResolvedValue(mockUser),
+      update: vi.fn().mockResolvedValue(mockUser),
     },
     session: {
-      create: vi.fn(),
-      deleteMany: vi.fn(),
+      create: vi.fn().mockResolvedValue({
+        id: "mock-session-id",
+        token: "mock.jwt.token",
+        userId: mockUser.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     $transaction: vi.fn((callback) => callback()),
   })),

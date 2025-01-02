@@ -1,5 +1,5 @@
 import type { PrismaClient, User } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import * as bcrypt from "bcryptjs";
 import type {
   AuthResponse,
   LoginCredentials,

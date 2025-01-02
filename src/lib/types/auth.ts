@@ -7,7 +7,9 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface RegistrationData extends LoginCredentials {
+export interface RegistrationData {
+  email: string;
+  password: string;
   confirmPassword: string;
 }
 
@@ -15,14 +17,18 @@ export interface AuthResponse {
   success: boolean;
   message: string;
   data?: {
-    user: SafeUser;
+    user: {
+      id: string;
+      email: string;
+      createdAt: Date;
+      updatedAt: Date;
+    };
     token: string;
   };
-  errors?: Record<string, string[]>;
 }
 
 export interface TokenPayload {
   userId: string;
-  iat: number;
-  exp: number;
+  iat?: number;
+  exp?: number;
 }
