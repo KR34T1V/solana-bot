@@ -1,4 +1,26 @@
-# Services Architecture Documentation
+# Services Documentation
+
+## Overview
+
+The Solana trading bot is built on a service-oriented architecture where each component is implemented as a managed service. This design provides:
+
+- Consistent lifecycle management
+- Standardized error handling
+- Unified logging and monitoring
+- Clean separation of concerns
+
+## Core Services
+
+### Provider System
+
+The provider system abstracts interactions with different DEX protocols and liquidity sources. For detailed documentation, see [PROVIDERS.md](./PROVIDERS.md).
+
+Key features:
+
+- Protocol abstraction layer
+- Unified trading interface
+- Price aggregation
+- Liquidity analysis
 
 ## Core Concepts
 
