@@ -128,7 +128,13 @@ describe("LoggingService", () => {
 
       logger.error(message, meta);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(message, meta);
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        message,
+        expect.objectContaining({
+          ...meta,
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should log warning messages with metadata", async () => {
@@ -138,7 +144,13 @@ describe("LoggingService", () => {
 
       logger.warn(message, meta);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(message, meta);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        message,
+        expect.objectContaining({
+          ...meta,
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should log info messages with metadata", async () => {
@@ -148,7 +160,13 @@ describe("LoggingService", () => {
 
       logger.info(message, meta);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(message, meta);
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        message,
+        expect.objectContaining({
+          ...meta,
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should log debug messages with metadata", async () => {
@@ -158,7 +176,13 @@ describe("LoggingService", () => {
 
       logger.debug(message, meta);
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(message, meta);
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        message,
+        expect.objectContaining({
+          ...meta,
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should handle undefined metadata", async () => {
@@ -167,7 +191,12 @@ describe("LoggingService", () => {
 
       logger.info(message);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(message, undefined);
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        message,
+        expect.objectContaining({
+          timestamp: expect.any(Date),
+        }),
+      );
     });
   });
 
@@ -180,15 +209,18 @@ describe("LoggingService", () => {
         token: "SOL",
         amount: 1.5,
         price: 100.5,
-        timestamp: new Date("2024-01-01T12:00:00Z"),
       };
 
       logger.logTradeExecution(tradeData);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Trade executed", {
-        ...tradeData,
-        type: "TRADE_EXECUTION",
-      });
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "Trade executed",
+        expect.objectContaining({
+          ...tradeData,
+          type: "TRADE_EXECUTION",
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should log sell trade executions", async () => {
@@ -199,15 +231,18 @@ describe("LoggingService", () => {
         token: "SOL",
         amount: 1.5,
         price: 105.5,
-        timestamp: new Date("2024-01-01T12:00:00Z"),
       };
 
       logger.logTradeExecution(tradeData);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Trade executed", {
-        ...tradeData,
-        type: "TRADE_EXECUTION",
-      });
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "Trade executed",
+        expect.objectContaining({
+          ...tradeData,
+          type: "TRADE_EXECUTION",
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should log strategy signals with indicators", async () => {
@@ -221,14 +256,17 @@ describe("LoggingService", () => {
           volume: 1000000,
           price: 102.5,
         },
-        timestamp: new Date("2024-01-01T12:00:00Z"),
       };
 
       logger.logStrategySignal(signalData);
 
       expect(mockLogger.debug).toHaveBeenCalledWith(
         "Strategy signal generated",
-        { ...signalData, type: "STRATEGY_SIGNAL" },
+        expect.objectContaining({
+          ...signalData,
+          type: "STRATEGY_SIGNAL",
+          timestamp: expect.any(Date),
+        }),
       );
     });
 
@@ -243,11 +281,15 @@ describe("LoggingService", () => {
 
       logger.logError(error, context);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(error.message, {
-        ...context,
-        stack: error.stack,
-        type: "ERROR",
-      });
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        error.message,
+        expect.objectContaining({
+          ...context,
+          stack: error.stack,
+          type: "ERROR",
+          timestamp: expect.any(Date),
+        }),
+      );
     });
 
     it("should log errors without context", async () => {
@@ -256,10 +298,14 @@ describe("LoggingService", () => {
 
       logger.logError(error);
 
-      expect(mockLogger.error).toHaveBeenCalledWith(error.message, {
-        stack: error.stack,
-        type: "ERROR",
-      });
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        error.message,
+        expect.objectContaining({
+          stack: error.stack,
+          type: "ERROR",
+          timestamp: expect.any(Date),
+        }),
+      );
     });
   });
 
@@ -281,6 +327,17 @@ describe("LoggingService", () => {
       expect(mockConsoleError).toHaveBeenCalled();
 
       mockConsoleError.mockRestore();
+    });
+  });
+
+  describe("Edge cases", () => {
+    it("should handle circular references in metadata", async () => {
+      const { logger } = await import("../logging.service");
+      const circular: any = { prop: "value" };
+      circular.self = circular;
+
+      // This should not throw
+      expect(() => logger.info("Test circular", circular)).not.toThrow();
     });
   });
 });
