@@ -208,30 +208,41 @@ export class ServiceManager {
       this.logger.info(`Service ${name} stopped successfully`);
     } catch (error) {
       metadata.status = ServiceStatus.ERROR;
-      this.logger.error(`Failed to stop service ${name}:`, { error });
       throw error;
     }
   }
 
   async stopAll(): Promise<void> {
-    try {
-      this.logger.info("Stopping all services");
+    this.logger.info("Stopping all services");
 
-      const visited = new Set<string>();
-      // Stop services in reverse dependency order
-      const services = Array.from(this.services.keys()).reverse();
-      for (const name of services) {
+    const errors: Error[] = [];
+    const visited = new Set<string>();
+
+    // Stop services in reverse dependency order
+    const services = Array.from(this.services.keys()).reverse();
+    for (const name of services) {
+      try {
         await this.stopService(name, visited);
+      } catch (error) {
+        errors.push(error as Error);
+        this.logger.error(`Failed to stop service ${name}:`, { error });
       }
-
-      // Stop the logger last
-      await this.logger.stop();
-
-      this.logger.info("All services stopped successfully");
-    } catch (error) {
-      this.logger.error("Failed to stop all services:", { error });
-      throw error;
     }
+
+    // Stop the logger last
+    try {
+      await this.logger.stop();
+    } catch (error) {
+      errors.push(error as Error);
+      this.logger.error("Failed to stop logger:", { error });
+    }
+
+    if (errors.length > 0) {
+      const errorMessage = errors.map((error) => error.message).join(", ");
+      throw new Error(`Failed to stop services: ${errorMessage}`);
+    }
+
+    this.logger.info("All services stopped successfully");
   }
 
   getServiceMetadata(name: string): ServiceMetadata {

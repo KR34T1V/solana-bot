@@ -263,11 +263,139 @@ describe("ServiceManager", () => {
     });
 
     it("should handle stop failures", async () => {
-      const service = new MockService(
-        "test-service",
+      const stopOrder: string[] = [];
+      const serviceA = new MockService(
+        "service-a",
         async () => {},
         async () => {
-          throw new Error("Stop failed");
+          stopOrder.push("service-a");
+          throw new Error("Stop failed for A");
+        },
+      );
+      const serviceB = new MockService(
+        "service-b",
+        async () => {},
+        async () => {
+          stopOrder.push("service-b");
+        },
+      );
+
+      serviceManager.register(serviceA, {
+        name: "service-a",
+        version: "1.0.0",
+      });
+      serviceManager.register(serviceB, {
+        name: "service-b",
+        version: "1.0.0",
+        dependencies: ["service-a"],
+      });
+
+      await serviceManager.startAll();
+      await expect(serviceManager.stopAll()).rejects.toThrow(
+        "Stop failed for A",
+      );
+
+      expect(stopOrder).toEqual(["service-b", "service-a"]);
+      expect(serviceManager.getServiceMetadata("service-a").status).toBe(
+        ServiceStatus.ERROR,
+      );
+      expect(serviceManager.getServiceMetadata("service-b").status).toBe(
+        ServiceStatus.STOPPED,
+      );
+    });
+
+    it("should handle multiple stop failures", async () => {
+      const stopOrder: string[] = [];
+      const serviceA = new MockService(
+        "service-a",
+        async () => {},
+        async () => {
+          stopOrder.push("service-a");
+          throw new Error("Stop failed for A");
+        },
+      );
+      const serviceB = new MockService(
+        "service-b",
+        async () => {},
+        async () => {
+          stopOrder.push("service-b");
+          throw new Error("Stop failed for B");
+        },
+      );
+
+      serviceManager.register(serviceA, {
+        name: "service-a",
+        version: "1.0.0",
+      });
+      serviceManager.register(serviceB, {
+        name: "service-b",
+        version: "1.0.0",
+      });
+
+      await serviceManager.startAll();
+      await expect(serviceManager.stopAll()).rejects.toThrow(/Stop failed/);
+
+      expect(stopOrder).toContain("service-a");
+      expect(stopOrder).toContain("service-b");
+      expect(serviceManager.getServiceMetadata("service-a").status).toBe(
+        ServiceStatus.ERROR,
+      );
+      expect(serviceManager.getServiceMetadata("service-b").status).toBe(
+        ServiceStatus.ERROR,
+      );
+      expect(mockLogger.error).toHaveBeenCalledTimes(2);
+    });
+
+    it("should handle cascading failures in dependency chain", async () => {
+      const serviceA = new MockService("service-a", async () => {
+        throw new Error("Service A failed");
+      });
+      const serviceB = new MockService("service-b");
+      const serviceC = new MockService("service-c");
+
+      serviceManager.register(serviceA, {
+        name: "service-a",
+        version: "1.0.0",
+      });
+      serviceManager.register(serviceB, {
+        name: "service-b",
+        version: "1.0.0",
+        dependencies: ["service-a"],
+      });
+      serviceManager.register(serviceC, {
+        name: "service-c",
+        version: "1.0.0",
+        dependencies: ["service-b"],
+      });
+
+      await expect(serviceManager.startAll()).rejects.toThrow(
+        "Service A failed",
+      );
+
+      // Verify all services are in error state
+      expect(serviceManager.getServiceMetadata("service-a").status).toBe(
+        ServiceStatus.ERROR,
+      );
+      expect(serviceManager.getServiceMetadata("service-b").isActive).toBe(
+        false,
+      );
+      expect(serviceManager.getServiceMetadata("service-c").isActive).toBe(
+        false,
+      );
+    });
+
+    it("should handle state transition failures", async () => {
+      let serviceStarted = false;
+      const service = new MockService(
+        "test-service",
+        async () => {
+          serviceStarted = true;
+          throw new Error("Failed during startup");
+        },
+        async () => {
+          if (serviceStarted) {
+            throw new Error("Failed during shutdown");
+          }
         },
       );
 
@@ -276,9 +404,89 @@ describe("ServiceManager", () => {
         version: "1.0.0",
       });
 
-      await serviceManager.startAll();
-      await expect(serviceManager.stopAll()).rejects.toThrow("Stop failed");
-      expect(mockLogger.error).toHaveBeenCalled();
+      // Test start failure
+      await expect(serviceManager.startAll()).rejects.toThrow(
+        "Failed during startup",
+      );
+      expect(serviceManager.getServiceMetadata("test-service").status).toBe(
+        ServiceStatus.ERROR,
+      );
+
+      // Verify error logging
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to start service test-service:"),
+        expect.any(Object),
+      );
+    });
+
+    it("should cleanup resources after failed operations", async () => {
+      const cleanupTracker = { cleaned: false };
+      const service = new MockService(
+        "test-service",
+        async () => {
+          throw new Error("Start failed");
+        },
+        async () => {
+          cleanupTracker.cleaned = true;
+        },
+      );
+
+      serviceManager.register(service, {
+        name: "test-service",
+        version: "1.0.0",
+      });
+
+      await expect(serviceManager.startAll()).rejects.toThrow("Start failed");
+      await service.stop();
+
+      expect(cleanupTracker.cleaned).toBe(true);
+      expect(serviceManager.getServiceMetadata("test-service").isActive).toBe(
+        false,
+      );
+    });
+
+    it("should handle partial startup failures", async () => {
+      const startOrder: string[] = [];
+      const serviceA = new MockService("service-a", async () => {
+        startOrder.push("service-a");
+      });
+      const serviceB = new MockService("service-b", async () => {
+        startOrder.push("service-b");
+        throw new Error("Service B failed");
+      });
+      const serviceC = new MockService("service-c", async () => {
+        startOrder.push("service-c");
+      });
+
+      serviceManager.register(serviceA, {
+        name: "service-a",
+        version: "1.0.0",
+      });
+      serviceManager.register(serviceB, {
+        name: "service-b",
+        version: "1.0.0",
+        dependencies: ["service-a"],
+      });
+      serviceManager.register(serviceC, {
+        name: "service-c",
+        version: "1.0.0",
+        dependencies: ["service-b"],
+      });
+
+      await expect(serviceManager.startAll()).rejects.toThrow(
+        "Service B failed",
+      );
+
+      expect(startOrder).toEqual(["service-a", "service-b"]);
+      expect(serviceManager.getServiceMetadata("service-a").isActive).toBe(
+        true,
+      );
+      expect(serviceManager.getServiceMetadata("service-b").status).toBe(
+        ServiceStatus.ERROR,
+      );
+      expect(serviceManager.getServiceMetadata("service-c").isActive).toBe(
+        false,
+      );
     });
   });
 
