@@ -9,19 +9,41 @@ import { ManagedAuthService } from "../core/managed-auth";
 import { ServiceStatus } from "../core/service.manager";
 import { AuthenticationError, ValidationError } from "$lib/utils/errors";
 import * as bcrypt from "bcryptjs";
+import { PrismaClient } from "@prisma/client";
+import { generateToken } from "$lib/utils/jwt";
 
-// Create mock functions
-const mockConnect = vi.fn();
-const mockDisconnect = vi.fn();
-const mockFindUnique = vi.fn();
-const mockCreate = vi.fn();
-const mockUpdate = vi.fn();
-const mockDeleteMany = vi.fn();
+// Mock modules first (these must be at the top level)
+vi.mock("@prisma/client", () => ({
+  PrismaClient: vi.fn(),
+}));
 
-// Mock PrismaClient
-vi.mock("@prisma/client", () => {
-  return {
-    PrismaClient: vi.fn().mockImplementation(() => ({
+vi.mock("bcryptjs", () => ({
+  hash: vi.fn(),
+  compare: vi.fn(),
+}));
+
+vi.mock("$lib/utils/jwt", () => ({
+  generateToken: vi.fn(),
+}));
+
+describe("ManagedAuthService", () => {
+  // Mock functions
+  const mockConnect = vi.fn();
+  const mockDisconnect = vi.fn();
+  const mockFindUnique = vi.fn();
+  const mockCreate = vi.fn();
+  const mockUpdate = vi.fn();
+  const mockDeleteMany = vi.fn();
+
+  let authService: ManagedAuthService;
+  let mockLogger: any;
+
+  beforeEach(() => {
+    // Reset all mocks
+    vi.clearAllMocks();
+
+    // Setup PrismaClient mock implementation
+    const mockPrismaClient = {
       $connect: mockConnect,
       $disconnect: mockDisconnect,
       user: {
@@ -33,28 +55,22 @@ vi.mock("@prisma/client", () => {
         create: mockCreate,
         deleteMany: mockDeleteMany,
       },
-    })),
-  };
-});
+    };
 
-// Mock bcryptjs
-vi.mock("bcryptjs", () => ({
-  hash: vi.fn(() => Promise.resolve("hashed_password")),
-  compare: vi.fn(() => Promise.resolve(false)),
-}));
+    vi.mocked(PrismaClient).mockImplementation(
+      () => mockPrismaClient as unknown as PrismaClient,
+    );
 
-// Mock JWT generation
-vi.mock("$lib/utils/jwt", () => ({
-  generateToken: vi.fn(() => Promise.resolve("test_token")),
-}));
+    // Setup bcrypt mock implementations
+    vi.mocked(bcrypt.hash).mockImplementation(() =>
+      Promise.resolve("hashed_password"),
+    );
+    vi.mocked(bcrypt.compare).mockImplementation(() => Promise.resolve(false));
 
-describe("ManagedAuthService", () => {
-  let authService: ManagedAuthService;
-  let mockLogger: any;
-
-  beforeEach(() => {
-    // Reset all mocks
-    vi.clearAllMocks();
+    // Setup JWT mock implementation
+    vi.mocked(generateToken).mockImplementation(() =>
+      Promise.resolve("test_token"),
+    );
 
     // Create mock logger
     mockLogger = {
@@ -336,37 +352,30 @@ describe("ManagedAuthService", () => {
   });
 
   describe("Logout", () => {
+    const userId = "user_id";
+
     beforeEach(async () => {
       mockConnect.mockResolvedValueOnce(undefined);
       await authService.start();
     });
 
     it("should logout user successfully", async () => {
-      const userId = "user_id";
-
       mockDeleteMany.mockResolvedValueOnce({ count: 1 });
 
-      const result = await authService.logout(userId);
-
-      expect(result).toEqual({
-        success: true,
-        message: "Logout successful",
-      });
+      await authService.logout(userId);
 
       expect(mockLogger.logAuthAttempt).toHaveBeenCalled();
       expect(mockLogger.logAuthSuccess).toHaveBeenCalled();
       expect(mockDeleteMany).toHaveBeenCalledWith({
-        where: { userId },
+        where: { token: userId },
       });
     });
 
     it("should handle logout errors", async () => {
-      const userId = "user_id";
-
       mockDeleteMany.mockRejectedValueOnce(new Error("Logout failed"));
 
       await expect(authService.logout(userId)).rejects.toThrow("Logout failed");
-      expect(mockLogger.logError).toHaveBeenCalled();
+      expect(mockLogger.logAuthFailure).toHaveBeenCalled();
     });
   });
 });

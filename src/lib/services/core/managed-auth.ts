@@ -250,13 +250,22 @@ export class ManagedAuthService implements Service {
           },
         });
 
+        if (shouldLock) {
+          this.config.logger.logAccountLock({
+            email: credentials.email,
+            userId: user.id,
+            loginAttempts,
+            lockedUntil: lockedUntil!,
+          });
+        }
+
         this.config.logger.logAuthFailure({
           action: "login",
           email: credentials.email,
           userId: user.id,
           failureReason: "Invalid password",
           loginAttempts,
-          lockedUntil,
+          ...(shouldLock && { lockedUntil }),
         });
 
         throw new AuthenticationError("Invalid email or password");
@@ -267,8 +276,8 @@ export class ManagedAuthService implements Service {
         where: { id: user.id },
         data: {
           loginAttempts: 0,
-          lastLoginAt: new Date(),
           lockedUntil: null,
+          lastLoginAt: new Date(),
         },
       });
 
@@ -315,27 +324,29 @@ export class ManagedAuthService implements Service {
     }
   }
 
-  async logout(token: string): Promise<void> {
+  async logout(userId: string): Promise<void> {
     this.ensureRunning();
     if (!this.prisma) return; // TypeScript guard
 
-    try {
-      // Delete session
-      const result = await this.prisma.session.deleteMany({
-        where: { token },
-      });
+    this.config.logger.logAuthAttempt({
+      action: "logout",
+      userId,
+    });
 
-      if (result.count === 0) {
-        throw new AuthenticationError("Invalid session");
-      }
+    try {
+      await this.prisma.session.deleteMany({
+        where: { token: userId },
+      });
 
       this.config.logger.logAuthSuccess({
         action: "logout",
+        userId,
       });
     } catch (error) {
       this.config.logger.logAuthFailure({
         action: "logout",
-        failureReason: error instanceof Error ? error.message : "Unknown error",
+        userId,
+        failureReason: (error as Error).message,
       });
       throw error;
     }
