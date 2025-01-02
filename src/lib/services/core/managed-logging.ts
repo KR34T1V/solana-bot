@@ -272,13 +272,14 @@ export class ManagedLoggingService implements Service {
     this.info("Trade executed", metadata);
   }
 
+  // Strategy signal logging
   logStrategySignal(data: Omit<SignalMetadata, "type" | "timestamp">) {
     if (!this.canLog()) return;
     const metadata = this.enrichMetadata({
       ...data,
       type: "STRATEGY_SIGNAL",
     });
-    this.info(`Strategy signal: ${data.signal}`, metadata);
+    this.debug("Strategy signal generated", metadata);
   }
 
   // Method to test if logging is properly configured
