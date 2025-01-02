@@ -4,7 +4,7 @@
  * @description Manages service lifecycle and dependencies
  */
 
-import { logger } from "./logging.service";
+import type { ManagedLoggingService } from "./managed-logging.service";
 
 export interface ServiceMetadata {
   name: string;
@@ -40,114 +40,200 @@ export interface Service {
 export class ServiceManager {
   private services: Map<string, Service>;
   private metadata: Map<string, ServiceMetadata>;
-  private startupOrder: string[];
-  private isInitialized: boolean;
+  private logger: ManagedLoggingService;
 
-  constructor() {
+  constructor(logger: ManagedLoggingService) {
     this.services = new Map();
     this.metadata = new Map();
-    this.startupOrder = [];
-    this.isInitialized = false;
+    this.logger = logger;
   }
 
-  /**
-   * Register a new service with the manager
-   * @param service Service instance to register
-   * @param config Service configuration
-   */
   register(service: Service, config: ServiceConfig): void {
-    if (this.services.has(config.name)) {
-      throw new Error(`Service ${config.name} is already registered`);
+    const name = service.getName();
+    if (this.services.has(name)) {
+      throw new Error(`Service ${name} is already registered`);
     }
 
-    this.services.set(config.name, service);
-    this.metadata.set(config.name, {
+    this.services.set(name, service);
+    this.metadata.set(name, {
       name: config.name,
       version: config.version,
       dependencies: config.dependencies || [],
       isActive: false,
-      status: ServiceStatus.PENDING,
+      status: service.getStatus(),
     });
 
-    logger.info("Service registered", {
-      service: config.name,
-      version: config.version,
-    });
+    this.logger.info(`Service ${name} registered`, { config });
   }
 
-  /**
-   * Deregister a service from the manager
-   * @param name Name of the service to deregister
-   */
-  async deregister(name: string): Promise<void> {
-    const service = this.services.get(name);
-    if (!service) {
+  deregister(name: string): void {
+    if (!this.services.has(name)) {
       throw new Error(`Service ${name} is not registered`);
     }
 
-    const metadata = this.metadata.get(name);
-    if (metadata?.isActive) {
-      await this.stopService(name);
+    const service = this.services.get(name)!;
+    if (service.getStatus() === ServiceStatus.RUNNING) {
+      throw new Error(`Service ${name} must be stopped before deregistering`);
     }
 
     this.services.delete(name);
     this.metadata.delete(name);
-    this.startupOrder = this.startupOrder.filter((s) => s !== name);
 
-    logger.info("Service deregistered", { service: name });
+    this.logger.info(`Service ${name} deregistered`);
   }
 
-  /**
-   * Initialize the service manager and calculate startup order
-   */
-  initialize(): void {
-    if (this.isInitialized) {
+  async initialize(): Promise<void> {
+    try {
+      // Start the logger first
+      await this.logger.start();
+
+      // Log initialization start
+      this.logger.info("Initializing service manager");
+
+      // Validate dependencies
+      this.validateDependencies();
+
+      this.logger.info("Service manager initialized");
+    } catch (error) {
+      this.logger.error("Failed to initialize service manager:", { error });
+      throw error;
+    }
+  }
+
+  private validateDependencies(): void {
+    const registeredServices = new Set(this.services.keys());
+
+    for (const [name, metadata] of this.metadata.entries()) {
+      for (const dependency of metadata.dependencies) {
+        if (!registeredServices.has(dependency)) {
+          throw new Error(
+            `Service ${name} depends on unregistered service ${dependency}`,
+          );
+        }
+      }
+    }
+  }
+
+  private async startService(
+    name: string,
+    visited: Set<string>,
+  ): Promise<void> {
+    if (visited.has(name)) {
+      throw new Error(`Circular dependency detected for service ${name}`);
+    }
+
+    const service = this.services.get(name);
+    if (!service) {
+      throw new Error(`Service ${name} not found`);
+    }
+
+    const metadata = this.metadata.get(name)!;
+    if (metadata.isActive) {
       return;
     }
 
-    this.calculateStartupOrder();
-    this.isInitialized = true;
+    visited.add(name);
 
-    logger.info("Service manager initialized", {
-      serviceCount: this.services.size,
-      startupOrder: this.startupOrder,
-    });
+    // Start dependencies first
+    for (const dependency of metadata.dependencies) {
+      await this.startService(dependency, visited);
+    }
+
+    visited.delete(name);
+
+    try {
+      this.logger.info(`Starting service ${name}`);
+      await service.start();
+      metadata.isActive = true;
+      metadata.startTime = Date.now();
+      metadata.status = service.getStatus();
+      this.logger.info(`Service ${name} started successfully`);
+    } catch (error) {
+      metadata.status = ServiceStatus.ERROR;
+      this.logger.error(`Failed to start service ${name}:`, { error });
+      throw error;
+    }
   }
 
-  /**
-   * Start all registered services in dependency order
-   */
   async startAll(): Promise<void> {
-    if (!this.isInitialized) {
-      this.initialize();
+    try {
+      this.logger.info("Starting all services");
+
+      const visited = new Set<string>();
+      for (const name of this.services.keys()) {
+        await this.startService(name, visited);
+      }
+
+      this.logger.info("All services started successfully");
+    } catch (error) {
+      this.logger.error("Failed to start all services:", { error });
+      throw error;
     }
-
-    logger.info("Starting all services...");
-
-    for (const serviceName of this.startupOrder) {
-      await this.startService(serviceName);
-    }
-
-    logger.info("All services started");
   }
 
-  /**
-   * Stop all services in reverse dependency order
-   */
+  private async stopService(name: string, visited: Set<string>): Promise<void> {
+    if (visited.has(name)) {
+      throw new Error(`Circular dependency detected for service ${name}`);
+    }
+
+    const service = this.services.get(name);
+    if (!service) {
+      throw new Error(`Service ${name} not found`);
+    }
+
+    const metadata = this.metadata.get(name)!;
+    if (!metadata.isActive) {
+      return;
+    }
+
+    visited.add(name);
+
+    // Find services that depend on this one
+    const dependents = Array.from(this.metadata.entries())
+      .filter(([_, meta]) => meta.dependencies.includes(name))
+      .map(([dependentName]) => dependentName);
+
+    // Stop dependent services first
+    for (const dependent of dependents) {
+      await this.stopService(dependent, visited);
+    }
+
+    visited.delete(name);
+
+    try {
+      this.logger.info(`Stopping service ${name}`);
+      await service.stop();
+      metadata.isActive = false;
+      metadata.status = service.getStatus();
+      this.logger.info(`Service ${name} stopped successfully`);
+    } catch (error) {
+      metadata.status = ServiceStatus.ERROR;
+      this.logger.error(`Failed to stop service ${name}:`, { error });
+      throw error;
+    }
+  }
+
   async stopAll(): Promise<void> {
-    logger.info("Stopping all services...");
+    try {
+      this.logger.info("Stopping all services");
 
-    for (const serviceName of [...this.startupOrder].reverse()) {
-      await this.stopService(serviceName);
+      const visited = new Set<string>();
+      // Stop services in reverse dependency order
+      const services = Array.from(this.services.keys()).reverse();
+      for (const name of services) {
+        await this.stopService(name, visited);
+      }
+
+      // Stop the logger last
+      await this.logger.stop();
+
+      this.logger.info("All services stopped successfully");
+    } catch (error) {
+      this.logger.error("Failed to stop all services:", { error });
+      throw error;
     }
-
-    logger.info("All services stopped");
   }
 
-  /**
-   * Get metadata for a specific service
-   * @param name Service name
-   */
   getServiceMetadata(name: string): ServiceMetadata {
     const metadata = this.metadata.get(name);
     if (!metadata) {
@@ -156,122 +242,9 @@ export class ServiceManager {
     return { ...metadata };
   }
 
-  /**
-   * Get all registered services metadata
-   */
   getAllServicesMetadata(): ServiceMetadata[] {
-    return Array.from(this.metadata.values()).map((m) => ({ ...m }));
-  }
-
-  /**
-   * Start a specific service and its dependencies
-   * @param name Service name
-   */
-  private async startService(name: string): Promise<void> {
-    const service = this.services.get(name);
-    const metadata = this.metadata.get(name);
-
-    if (!service || !metadata) {
-      throw new Error(`Service ${name} not found`);
-    }
-
-    if (metadata.isActive) {
-      return;
-    }
-
-    try {
-      metadata.status = ServiceStatus.STARTING;
-      await service.start();
-
-      metadata.isActive = true;
-      metadata.startTime = Date.now();
-      metadata.status = ServiceStatus.RUNNING;
-
-      logger.info("Service started", { service: name });
-    } catch (error) {
-      metadata.status = ServiceStatus.ERROR;
-      logger.error("Failed to start service", {
-        service: name,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Stop a specific service
-   * @param name Service name
-   */
-  private async stopService(name: string): Promise<void> {
-    const service = this.services.get(name);
-    const metadata = this.metadata.get(name);
-
-    if (!service || !metadata) {
-      throw new Error(`Service ${name} not found`);
-    }
-
-    if (!metadata.isActive) {
-      return;
-    }
-
-    try {
-      metadata.status = ServiceStatus.STOPPING;
-      await service.stop();
-
-      metadata.isActive = false;
-      metadata.startTime = undefined;
-      metadata.status = ServiceStatus.STOPPED;
-
-      logger.info("Service stopped", { service: name });
-    } catch (error) {
-      metadata.status = ServiceStatus.ERROR;
-      logger.error("Failed to stop service", {
-        service: name,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Calculate service startup order based on dependencies
-   */
-  private calculateStartupOrder(): void {
-    const visited = new Set<string>();
-    const visiting = new Set<string>();
-    const ordered: string[] = [];
-
-    const visit = (name: string) => {
-      if (visiting.has(name)) {
-        throw new Error(`Circular dependency detected: ${name}`);
-      }
-      if (visited.has(name)) {
-        return;
-      }
-
-      visiting.add(name);
-
-      const metadata = this.metadata.get(name);
-      if (!metadata) {
-        throw new Error(`Service ${name} not found`);
-      }
-
-      for (const dep of metadata.dependencies) {
-        if (!this.services.has(dep)) {
-          throw new Error(`Dependency ${dep} not found for service ${name}`);
-        }
-        visit(dep);
-      }
-
-      visiting.delete(name);
-      visited.add(name);
-      ordered.push(name);
-    };
-
-    for (const name of this.services.keys()) {
-      visit(name);
-    }
-
-    this.startupOrder = ordered;
+    return Array.from(this.metadata.values()).map((metadata) => ({
+      ...metadata,
+    }));
   }
 }
