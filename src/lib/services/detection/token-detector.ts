@@ -298,6 +298,32 @@ export class TokenDetector extends EventEmitter {
 
   /**
    * Validate a token against configured rules
+   *
+   * @description
+   * Performs a comprehensive validation of a token against predefined rules and configurations.
+   * The validation includes checks for:
+   * - Token decimals range
+   * - Required metadata fields
+   * - Creator validation
+   *
+   * Each validation produces a result that includes:
+   * - The specific check performed
+   * - Whether the check passed
+   * - Detailed information about the validation
+   *
+   * @param token - The token metadata to validate
+   * @returns An array of validation results for each check performed
+   *
+   * @throws {ValidationError} If token metadata is malformed
+   *
+   * @example
+   * ```typescript
+   * const results = await detector.validateToken({
+   *   decimals: 9,
+   *   metadata: { name: "Test Token", symbol: "TEST" },
+   *   creator: "ABC123..."
+   * });
+   * ```
    */
   private async validateToken(
     token: TokenMetadata,
@@ -342,6 +368,27 @@ export class TokenDetector extends EventEmitter {
 
   /**
    * Calculate confidence score based on validation results
+   *
+   * @description
+   * Computes a confidence score between 0 and 1 based on the validation results.
+   * The score represents how many validation checks passed out of the total checks performed.
+   *
+   * Confidence Score Interpretation:
+   * - 1.0: All checks passed
+   * - 0.0: All checks failed
+   * - Between 0-1: Partial validation success
+   *
+   * @param results - Array of validation results to analyze
+   * @returns A number between 0 and 1 representing the confidence score
+   *
+   * @example
+   * ```typescript
+   * const results = await detector.validateToken(token);
+   * const confidence = detector.calculateConfidence(results);
+   * if (confidence > 0.8) {
+   *   // Token passed most validation checks
+   * }
+   * ```
    */
   private calculateConfidence(results: ValidationResult[]): number {
     const passedChecks = results.filter((r) => r.passed).length;

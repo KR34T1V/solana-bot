@@ -294,7 +294,44 @@ export class LiquidityAnalyzer extends EventEmitter {
   }
 
   /**
-   * Calculate confidence in analysis
+   * Calculate confidence in liquidity analysis
+   *
+   * @description
+   * Computes a weighted confidence score based on multiple factors:
+   *
+   * 1. Liquidity Factor (30% weight):
+   *    - Evaluates the USD value of liquidity against minimum requirements
+   *    - Higher liquidity increases confidence up to a cap
+   *
+   * 2. LP Tokens Locked (30% weight):
+   *    - Assesses the percentage of LP tokens locked in vesting contracts
+   *    - Higher locked percentage increases confidence
+   *
+   * 3. Token Distribution (20% weight):
+   *    - Analyzes token distribution among holders
+   *    - Lower creator ownership increases confidence
+   *
+   * Base confidence starts at 30% and can increase based on these factors.
+   *
+   * @param pool - Pool information including liquidity, LP tokens, and creator data
+   * @returns A confidence score between 0 and 1
+   *
+   * @example
+   * ```typescript
+   * const confidence = analyzer.calculateConfidence({
+   *   liquidity: { usdValue: 100000 },
+   *   lpTokens: { locked: 800000, totalSupply: 1000000 },
+   *   creatorInfo: { percentageOwned: 20 }
+   * });
+   * ```
+   *
+   * @remarks
+   * Confidence Interpretation:
+   * - 0.9-1.0: Very high confidence
+   * - 0.7-0.9: High confidence
+   * - 0.5-0.7: Moderate confidence
+   * - 0.3-0.5: Low confidence
+   * - <0.3: Very low confidence
    */
   private calculateConfidence(pool: PoolInfo): number {
     // Factors that increase confidence:

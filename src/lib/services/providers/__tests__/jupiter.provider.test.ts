@@ -1,7 +1,21 @@
 /**
  * @file Jupiter Provider Tests
  * @version 1.0.0
- * @description Test suite for Jupiter provider implementation
+ * @description Test suite for Jupiter provider implementation that verifies proper integration
+ * with Jupiter Protocol's price and liquidity services. This test suite ensures the provider
+ * correctly implements the BaseProvider interface and handles all service lifecycle events.
+ *
+ * @remarks
+ * Test Coverage:
+ * - Service lifecycle (start/stop)
+ * - Price fetching and validation
+ * - Error handling and recovery
+ * - Connection management
+ *
+ * @dependencies
+ * - @solana/web3.js for blockchain interaction
+ * - axios for API communication
+ * - ManagedLoggingService for logging
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -10,7 +24,17 @@ import { JupiterProvider } from "../jupiter.provider";
 import { ManagedLoggingService } from "../../core/managed-logging";
 import { ServiceStatus } from "../../core/service.manager";
 
-// Mock axios
+/**
+ * Mock Configuration
+ * -----------------
+ * The following section sets up all necessary mocks for isolated testing.
+ * Each mock is documented with its purpose and behavior.
+ */
+
+/**
+ * Mock axios for price feed simulation
+ * Provides consistent test data for price queries
+ */
 vi.mock("axios", () => ({
   default: {
     get: vi.fn().mockResolvedValue({
@@ -28,14 +52,20 @@ vi.mock("axios", () => ({
   },
 }));
 
-// Mock Connection
+/**
+ * Mock Solana Connection
+ * Simulates blockchain interaction without network calls
+ */
 vi.mock("@solana/web3.js", () => ({
   Connection: vi.fn().mockImplementation(() => ({
     getSlot: vi.fn().mockResolvedValue(1),
   })),
 }));
 
-// Mock logging service
+/**
+ * Mock logging service
+ * Provides logging interface without actual logging
+ */
 vi.mock("../../core/managed-logging", () => ({
   ManagedLoggingService: vi.fn().mockImplementation(() => ({
     start: vi.fn().mockResolvedValue(undefined),
@@ -52,6 +82,15 @@ describe("Jupiter Provider", () => {
   let logger: ManagedLoggingService;
   let connection: Connection;
 
+  /**
+   * Test Setup
+   * ----------
+   * Before each test:
+   * 1. Clear all mocks
+   * 2. Create fresh logger instance
+   * 3. Initialize Solana connection
+   * 4. Create new provider instance
+   */
   beforeEach(() => {
     vi.clearAllMocks();
     logger = new ManagedLoggingService({
@@ -70,6 +109,11 @@ describe("Jupiter Provider", () => {
     );
   });
 
+  /**
+   * Service Lifecycle Tests
+   * ----------------------
+   * Verify proper implementation of the Service interface
+   */
   describe("Service Lifecycle", () => {
     it("should start correctly", async () => {
       await provider.start();
@@ -83,6 +127,11 @@ describe("Jupiter Provider", () => {
     });
   });
 
+  /**
+   * Provider Operations Tests
+   * -----------------------
+   * Verify core provider functionality
+   */
   describe("Provider Operations", () => {
     it("should get price", async () => {
       await provider.start();
