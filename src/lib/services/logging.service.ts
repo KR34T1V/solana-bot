@@ -1,7 +1,7 @@
 import winston from "winston";
 import { join } from "path";
 
-// Test pre-commit hook: Adding a comment to trigger change
+// Test pre-commit hook: Testing if everything works
 const LOG_DIR = "logs";
 const MAX_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 const MAX_FILES = 14; // 14 days worth of files
