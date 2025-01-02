@@ -12,20 +12,129 @@ import type {
 } from "../types";
 
 // Mock web3 connection
-vi.mock("@solana/web3.js", () => ({
-  Connection: vi.fn(() => ({
-    onAccountChange: vi.fn(),
-    onProgramAccountChange: vi.fn(),
-    getProgramAccounts: vi.fn(),
-  })),
-}));
+vi.mock("@solana/web3.js", () => {
+  const mockGetAccountInfo = vi.fn();
+  const mockGetSignaturesForAddress = vi.fn();
+
+  mockGetAccountInfo.mockImplementation((pubkey) => {
+    if (pubkey.toString() === "new-creator-address") {
+      return Promise.resolve({
+        lamports: 1 * 1e9, // 1 SOL
+      });
+    }
+    return Promise.resolve({
+      lamports: 15 * 1e9, // 15 SOL
+    });
+  });
+
+  mockGetSignaturesForAddress.mockImplementation((pubkey) => {
+    if (pubkey.toString() === "new-creator-address") {
+      return Promise.resolve(
+        Array.from({ length: 10 }, (_, i) => ({
+          blockTime:
+            Math.floor((Date.now() - 1 * 24 * 60 * 60 * 1000) / 1000) - i,
+        })),
+      );
+    }
+    return Promise.resolve(
+      Array.from({ length: 150 }, (_, i) => ({
+        blockTime:
+          Math.floor((Date.now() - 40 * 24 * 60 * 60 * 1000) / 1000) - i,
+      })),
+    );
+  });
+
+  return {
+    Connection: vi.fn(() => ({
+      onAccountChange: vi.fn(),
+      onProgramAccountChange: vi.fn(),
+      getProgramAccounts: vi.fn(),
+      getAccountInfo: mockGetAccountInfo,
+      getSignaturesForAddress: mockGetSignaturesForAddress,
+    })),
+    PublicKey: vi.fn().mockImplementation((key) => ({
+      toString: () => key,
+      toBase58: () => key,
+      equals: (other: any) => key === other.toString(),
+    })),
+  };
+});
 
 // Mock providers
-vi.mock("../../providers/provider.factory", () => ({
-  ProviderFactory: {
-    getProvider: vi.fn(),
-  },
-}));
+vi.mock("../../providers/provider.factory", () => {
+  const mockGetOrderBook = vi.fn();
+
+  // Default order book (healthy)
+  const healthyOrderBook = {
+    bids: [
+      [1.98, 1000],
+      [1.97, 2000],
+      [1.96, 3000],
+    ],
+    asks: [
+      [2.02, 1000],
+      [2.03, 2000],
+      [2.04, 3000],
+    ],
+    timestamp: Date.now(),
+  };
+
+  // Low liquidity order book
+  const lowLiquidityOrderBook = {
+    bids: [
+      [1.98, 10],
+      [1.97, 5],
+      [1.96, 5],
+    ],
+    asks: [
+      [2.02, 10],
+      [2.03, 5],
+      [2.04, 5],
+    ],
+    timestamp: Date.now(),
+  };
+
+  // Honeypot order book (large spread and low liquidity)
+  const honeypotOrderBook = {
+    bids: [
+      [1.0, 10],
+      [0.9, 5],
+      [0.8, 5],
+    ],
+    asks: [
+      [2.0, 10],
+      [2.1, 5],
+      [2.2, 5],
+    ],
+    timestamp: Date.now(),
+  };
+
+  mockGetOrderBook.mockImplementation((mint) => {
+    if (mint === "low-liq-token") {
+      return Promise.resolve(lowLiquidityOrderBook);
+    }
+    if (mint === "suspicious-token") {
+      return Promise.resolve(honeypotOrderBook);
+    }
+    return Promise.resolve(healthyOrderBook);
+  });
+
+  return {
+    ProviderType: {
+      JUPITER: "jupiter",
+    },
+    ProviderFactory: {
+      getProvider: vi.fn().mockReturnValue({
+        getPrice: vi.fn().mockResolvedValue({
+          price: 2.0,
+          timestamp: Date.now(),
+          confidence: 0.95,
+        }),
+        getOrderBook: mockGetOrderBook,
+      }),
+    },
+  };
+});
 
 describe("TokenSniper", () => {
   let sniper: TokenSniper;

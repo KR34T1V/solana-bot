@@ -129,11 +129,13 @@ export class TokenSniper {
       // Get creator's historical liquidity
       const liquidity = await this.getCreatorLiquidity(address);
 
-      return (
+      // Validate against config thresholds
+      const isValid =
         age >= this.config.validation.creatorWalletAge &&
         transactions >= this.config.validation.creatorTransactions &&
-        liquidity >= this.config.validation.creatorLiquidity
-      );
+        liquidity >= this.config.validation.creatorLiquidity;
+
+      return isValid;
     } catch (error) {
       logger.error("Failed to validate creator:", { error });
       return false;
@@ -144,8 +146,8 @@ export class TokenSniper {
     try {
       const provider = ProviderFactory.getProvider(ProviderType.JUPITER);
       const price = await provider.getPrice(mint);
+      const liquidityInfo = await provider.getOrderBook(mint);
 
-      // Mock implementation - replace with actual DEX queries
       const analysis: TokenAnalysis = {
         mint,
         isEnterable: false,
@@ -153,7 +155,10 @@ export class TokenSniper {
         riskScore: 0,
         metrics: {
           price: price.price,
-          liquidity: 0,
+          liquidity: liquidityInfo.bids.reduce(
+            (sum, [_, size]) => sum + size,
+            0,
+          ),
           volume: 0,
           holders: 0,
           pairs: 0,
@@ -165,10 +170,11 @@ export class TokenSniper {
       };
 
       // Perform liquidity analysis
-      // This is a simplified mock - implement actual DEX queries
-      analysis.metrics.liquidity = 30; // Mock value
       analysis.metrics.pairs = 3; // Mock value
-      analysis.liquidityScore = 0.9; // Mock value
+      analysis.liquidityScore =
+        analysis.metrics.liquidity >= this.config.entry.minLiquidity
+          ? 0.9
+          : 0.1;
       analysis.isEnterable =
         analysis.metrics.liquidity >= this.config.entry.minLiquidity &&
         analysis.metrics.pairs >= this.config.entry.minDEXPairs;
@@ -220,9 +226,35 @@ export class TokenSniper {
     return totalExposure <= this.config.risk.maxDailyExposure;
   }
 
-  async checkTokenSafety(_mint: string): Promise<{ isHoneypot: boolean }> {
-    // Implement actual honeypot detection
-    return { isHoneypot: false };
+  async checkTokenSafety(mint: string): Promise<{ isHoneypot: boolean }> {
+    try {
+      // Check for suspicious token characteristics
+      const provider = ProviderFactory.getProvider(ProviderType.JUPITER);
+      const orderBook = await provider.getOrderBook(mint);
+
+      // Check for unrealistic price spreads
+      const [[bestBidPrice], [bestAskPrice]] = [
+        orderBook.bids[0] || [0],
+        orderBook.asks[0] || [0],
+      ];
+      const spread = bestAskPrice - bestBidPrice;
+      const spreadPercentage = spread / bestBidPrice;
+
+      // Check for suspicious liquidity patterns
+      const totalLiquidity = orderBook.bids.reduce(
+        (sum, [_, size]) => sum + size,
+        0,
+      );
+      const hasLowLiquidity = totalLiquidity < this.config.entry.minLiquidity;
+
+      // Determine if token is likely a honeypot
+      const isHoneypot = spreadPercentage > 0.1 || hasLowLiquidity;
+
+      return { isHoneypot };
+    } catch (error) {
+      logger.error("Failed to check token safety:", { error });
+      return { isHoneypot: true }; // Fail safe - treat as honeypot if check fails
+    }
   }
 
   async verifyLiquidityLock(
@@ -257,34 +289,75 @@ export class TokenSniper {
   }
 
   getPerformanceMetrics(): PerformanceMetrics {
-    const trades = this.tradeHistory;
-    const winningTrades = trades.filter((trade) => trade.profit > 0);
+    const totalTrades = this.tradeHistory.length;
+    if (totalTrades === 0) {
+      return {
+        winRate: 0,
+        averageReturn: 0,
+        riskRewardRatio: 0,
+        maxDrawdown: 0,
+      };
+    }
+
+    const profitableTrades = this.tradeHistory.filter(
+      (trade) => trade.profit > 0,
+    ).length;
+    const totalReturn = this.tradeHistory.reduce(
+      (sum, trade) => sum + trade.profit,
+      0,
+    );
+
+    // Calculate max drawdown
+    let maxDrawdown = 0;
+    let peak = 0;
+    let currentValue = 0;
+    this.tradeHistory.forEach((trade) => {
+      currentValue += trade.profit;
+      peak = Math.max(peak, currentValue);
+      maxDrawdown = Math.max(maxDrawdown, (peak - currentValue) / peak);
+    });
+
+    // Calculate risk/reward ratio
+    const avgWin =
+      this.tradeHistory
+        .filter((trade) => trade.profit > 0)
+        .reduce((sum, trade) => sum + trade.profit, 0) / profitableTrades;
+    const avgLoss =
+      this.tradeHistory
+        .filter((trade) => trade.profit < 0)
+        .reduce((sum, trade) => sum + Math.abs(trade.profit), 0) /
+      (totalTrades - profitableTrades);
+    const riskRewardRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
 
     return {
-      winRate: winningTrades.length / trades.length,
-      averageReturn:
-        trades.reduce((sum, trade) => sum + trade.profit, 0) / trades.length,
-      riskRewardRatio: 0, // Implement actual calculation
-      maxDrawdown: 0, // Implement actual calculation
+      winRate: profitableTrades / totalTrades,
+      averageReturn: totalReturn / totalTrades,
+      riskRewardRatio,
+      maxDrawdown,
     };
   }
 
-  async recordError(message: string): Promise<void> {
+  async recordError(_message: string): Promise<void> {
     this.errorCount++;
-    this.status.errors = {
-      count: this.errorCount,
-      lastError: message,
-      timestamp: Date.now(),
-    };
+    this.status.errors.count++;
 
     if (this.errorCount >= 5) {
       this.status.isCircuitBroken = true;
       logger.error("Circuit breaker triggered due to high error rate");
     }
+
+    // Reset error count after 5 minutes
+    setTimeout(
+      () => {
+        this.errorCount--;
+      },
+      5 * 60 * 1000,
+    );
   }
 
   async recordLatency(latency: number): Promise<void> {
     this.status.performance.latency = latency;
+
     if (latency > 500) {
       this.status.isPaused = true;
       logger.warn("System paused due to high latency", { latency });
@@ -299,18 +372,24 @@ export class TokenSniper {
     return this.status.isPaused;
   }
 
-  private async getCreatorLiquidity(_address: string): Promise<number> {
-    // Implement actual liquidity calculation
-    return 15; // Mock value
+  private async getCreatorLiquidity(address: string): Promise<number> {
+    try {
+      // Mock implementation - replace with actual liquidity calculation
+      const pubkey = new PublicKey(address);
+      const accountInfo = await this.connection.getAccountInfo(pubkey);
+      return accountInfo?.lamports ? accountInfo.lamports / 1e9 : 0;
+    } catch (error) {
+      logger.error("Failed to get creator liquidity:", { error });
+      return 0;
+    }
   }
 
-  private async handleNewAccount(accountInfo: any): Promise<void> {
-    // Implement actual new account handling
-    logger.debug("New account detected", { accountInfo });
+  private async handleNewAccount(_accountInfo: any): Promise<void> {
+    // Implement new account handling logic
   }
 
   private async executeEntry(analysis: TokenAnalysis): Promise<void> {
-    // Implement actual entry execution
     logger.info("Executing entry", { analysis });
+    // Implement entry execution logic
   }
 }

@@ -162,21 +162,29 @@ export class RaydiumProvider implements BaseProvider {
 
   private async updatePoolData(): Promise<void> {
     const now = Date.now();
-    if (now - this.lastUpdate < 10000) return; // 10 second cache
+    if (now - this.lastUpdate < 10000) return;
 
     try {
       // Fetch V3 (CL) pools
-      const v3Pools = await this.apiClient.get(`${API_V2_BASE}/ammV3/ammPools`);
+      const v3Response = await this.apiClient.get(
+        `${API_V2_BASE}/ammV3/ammPools`,
+      );
+      const v2Response = await this.apiClient.get(`${API_V2_BASE}/main/pairs`);
 
-      // Fetch V2 (CP) pools
-      const v2Pools = await this.apiClient.get(`${API_V2_BASE}/main/pairs`);
+      const v3Pools = Array.isArray(v3Response.data) ? v3Response.data : [];
+      const v2Pools = Array.isArray(v2Response.data) ? v2Response.data : [];
 
-      // Combine and cache pools
-      [...v3Pools.data, ...v2Pools.data].forEach((pool) => {
-        this.poolCache.set(pool.id, {
-          ...pool,
-          version: "ammId" in pool ? 2 : 3, // Determine version based on structure
-        });
+      // Clear existing cache
+      this.poolCache.clear();
+
+      // Combine and cache pools with proper type checking
+      [...v3Pools, ...v2Pools].forEach((pool) => {
+        if (this.isValidPool(pool)) {
+          this.poolCache.set(pool.id, {
+            ...pool,
+            version: this.determinePoolVersion(pool),
+          });
+        }
       });
 
       this.lastUpdate = now;
@@ -184,6 +192,35 @@ export class RaydiumProvider implements BaseProvider {
       logger.error("Failed to update Raydium pool data:", { error });
       throw error;
     }
+  }
+
+  private isValidPool(pool: any): pool is RaydiumPool {
+    return (
+      pool &&
+      typeof pool.id === "string" &&
+      typeof pool.baseMint === "string" &&
+      typeof pool.quoteMint === "string"
+    );
+  }
+
+  private determinePoolVersion(pool: RaydiumPool): number {
+    return "ammId" in pool ? 2 : 3;
+  }
+
+  private calculatePriceConfidence(pool: RaydiumPool): number {
+    if (!pool.baseReserve || !pool.quoteReserve) {
+      return 0;
+    }
+
+    const minReserve = Math.min(pool.baseReserve, pool.quoteReserve);
+    const maxReserve = Math.max(pool.baseReserve, pool.quoteReserve);
+
+    if (maxReserve === 0) {
+      return 0;
+    }
+
+    const ratio = minReserve / maxReserve;
+    return Math.min(Math.max(ratio * 1.5, 0), 1);
   }
 
   private async findBestPool(tokenMint: string): Promise<RaydiumPool | null> {
@@ -203,19 +240,6 @@ export class RaydiumProvider implements BaseProvider {
     }
 
     return bestPool;
-  }
-
-  private calculatePriceConfidence(pool: RaydiumPool): number {
-    // Calculate confidence based on:
-    // 1. Pool liquidity depth
-    // 2. Recent volume
-    // 3. Price impact
-    const minReserve = Math.min(pool.baseReserve, pool.quoteReserve);
-    const maxReserve = Math.max(pool.baseReserve, pool.quoteReserve);
-    const ratio = minReserve / maxReserve;
-
-    // Return confidence score between 0 and 1
-    return Math.min(ratio * 1.5, 1);
   }
 
   private async getV3Price(pool: RaydiumPool): Promise<number> {
