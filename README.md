@@ -1,118 +1,138 @@
 # Solana Trading Bot
 
-A secure, scalable Solana trading bot with real-time token detection and automated trading capabilities.
+A sophisticated trading bot for Solana tokens built with TypeScript, featuring advanced token discovery, safety analysis, and automated trading capabilities.
 
 ## Features
 
-### Token Detection Service
+### Token Discovery & Analysis
 
-- Real-time monitoring of new token mints on Solana
-- Robust validation and filtering of token launches
-- Support for multiple log formats and creator detection
-- Configurable validation rules for decimals, metadata, and creators
-- Type-safe event emission for token detection and errors
+- Real-time token creation monitoring
+- Comprehensive token validation and safety checks
+- Creator wallet analysis and scoring
+- Initial liquidity monitoring and analysis
+- Multi-DEX integration with Raydium and Jupiter
+
+### Safety & Risk Management
+
+- Honeypot detection
+- Rug pull risk analysis
+- MEV protection
+- Liquidity lock verification
+- Trading pattern analysis
+- Circuit breaker protection
+
+### Trading Features
+
+- Automated entry/exit strategies
+- Position sizing optimization
+- Multi-DEX price aggregation
+- Slippage protection
+- Performance tracking
+- Risk-adjusted returns calculation
+
+### Performance Metrics
+
+- Win rate tracking
+- Risk/reward ratio analysis
+- Maximum drawdown monitoring
+- Sharpe ratio calculation
+- System latency monitoring
+- Error rate tracking
 
 ## Installation
 
 ```bash
-npm install
+# Clone the repository
+git clone https://github.com/yourusername/solana-bot.git
+
+# Install dependencies
+yarn install
+
+# Set up environment variables
+cp .env.example .env
 ```
 
 ## Configuration
 
-The token detector can be configured with the following options:
+Create a `.env` file with the following variables:
 
-```typescript
-interface TokenConfig {
-  minDecimals: number; // Minimum allowed decimal places
-  maxDecimals: number; // Maximum allowed decimal places
-  requiredMetadataFields: string[]; // Required metadata fields (e.g., ['name', 'symbol'])
-  excludedCreators?: string[]; // List of creators to exclude
-  minInitialLiquidity?: number; // Minimum initial liquidity requirement
-}
+```env
+SOLANA_RPC_URL=your_rpc_url
+PRIVATE_KEY=your_private_key
 ```
 
 ## Usage
 
-```typescript
-import { Connection } from "@solana/web3.js";
-import { TokenDetector } from "./lib/services/detection/token-detector";
+```bash
+# Start the bot
+yarn start
 
-// Initialize connection
-const connection = new Connection("YOUR_RPC_ENDPOINT");
+# Run tests
+yarn test
 
-// Configure token detector
-const config = {
-  minDecimals: 0,
-  maxDecimals: 9,
-  requiredMetadataFields: ["name", "symbol"],
-  excludedCreators: ["EXCLUDED_CREATOR_ADDRESS"],
-};
-
-// Create detector instance
-const detector = new TokenDetector(connection, config);
-
-// Listen for new token detections
-detector.on("detection", (result) => {
-  console.log("New token detected:", result.token);
-  console.log("Confidence score:", result.confidence);
-  console.log("Validation results:", result.validationResults);
-});
-
-// Handle errors
-detector.on("error", (error) => {
-  console.error("Detection error:", error);
-});
-
-// Start monitoring
-await detector.start();
+# Build the project
+yarn build
 ```
+
+## Architecture
+
+### Core Components
+
+1. **TokenSniper**
+
+   - Token discovery and validation
+   - Safety analysis
+   - Entry/exit decision making
+
+2. **Provider System**
+
+   - Multi-DEX integration
+   - Price aggregation
+   - Liquidity analysis
+
+3. **Risk Management**
+   - Position sizing
+   - Exposure management
+   - Stop loss implementation
+
+### Type System
+
+The project uses TypeScript with strict type checking and includes comprehensive type definitions for:
+
+- Token data structures
+- Trading parameters
+- Safety metrics
+- Performance analytics
 
 ## Testing
 
-Run the test suite:
+The project includes extensive test coverage:
 
-```bash
-npm test
-```
+- Unit tests for core components
+- Integration tests for DEX interactions
+- Mock providers for testing
+- Performance benchmarks
 
-Run specific tests:
+## Security
 
-```bash
-npm test src/lib/services/detection/__tests__/token-detector.test.ts
-```
-
-## Development
-
-### Code Structure
-
-- `src/lib/services/detection/` - Token detection service
-  - `token-detector.ts` - Main token detection implementation
-  - `__tests__/` - Test files
-
-### Token Detection Process
-
-1. Monitor Solana Token Program logs for new mint instructions
-2. Extract mint address and creator information
-3. Validate token metadata and configuration
-4. Calculate confidence score based on validation results
-5. Emit detection events for valid tokens
-
-### Validation Rules
-
-- Decimal places within configured range
-- Required metadata fields present
-- Creator not in exclusion list
-- Valid public keys for mint and creator addresses
+- Private key encryption
+- Rate limiting
+- Circuit breaker implementation
+- Error handling and logging
+- Secure RPC connection management
 
 ## Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ## License
 
-UNLICENSED
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Disclaimer
+
+This software is for educational purposes only. Use at your own risk. The authors and contributors are not responsible for any financial losses incurred while using this software.

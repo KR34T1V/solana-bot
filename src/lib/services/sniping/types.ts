@@ -93,3 +93,73 @@ export interface SystemStatus {
     uptime: number;
   };
 }
+
+export interface TokenData {
+  mint: string;
+  creator: string;
+  timestamp: number;
+  metadata?: {
+    name?: string;
+    symbol?: string;
+    decimals: number;
+  };
+  supply?: {
+    total: number;
+    circulating: number;
+  };
+  contract?: {
+    hasProxy: boolean;
+    hasMintAuthority: boolean;
+    isVerified: boolean;
+  };
+}
+
+export interface SafetyScore {
+  overall: number; // 0-1 score
+  factors: {
+    contractSafety: number;
+    creatorTrust: number;
+    liquidityHealth: number;
+    tradingPattern: number;
+  };
+  flags: {
+    isHoneypot: boolean;
+    hasRugPullRisk: boolean;
+    hasMEVRisk: boolean;
+    hasAbnormalActivity: boolean;
+  };
+}
+
+export interface CreatorScore {
+  overall: number; // 0-1 score
+  metrics: {
+    walletAge: number; // in seconds
+    transactionCount: number;
+    successfulTokens: number;
+    rugPullCount: number;
+  };
+  risk: {
+    isKnownScammer: boolean;
+    hasScamConnections: boolean;
+    hasAbnormalPatterns: boolean;
+  };
+}
+
+export interface LiquidityData {
+  poolId: string;
+  dex: string;
+  baseAmount: number;
+  quoteAmount: number;
+  price: number;
+  timestamp: number;
+  metrics: {
+    depth: number;
+    distribution: number;
+    stability: number;
+  };
+  flags: {
+    isLocked: boolean;
+    lockDuration?: number;
+    isSuspicious: boolean;
+  };
+}
