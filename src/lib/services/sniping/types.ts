@@ -4,37 +4,36 @@
  */
 
 export interface TokenValidation {
-  creatorWalletAge: number; // Minimum wallet age in milliseconds
-  creatorTransactions: number; // Minimum number of transactions
-  creatorLiquidity: number; // Minimum historical liquidity in SOL
-  initialSupply?: number; // Initial token supply
-  initialLiquidity: number; // Minimum initial liquidity in SOL
-  initialMarketCap?: number; // Initial market cap in USD
-  holderDistribution?: number[]; // Initial holder breakdown
-  isHoneypot?: boolean; // Honeypot detection flag
-  hasRenounced?: boolean; // Whether ownership is renounced
-  transferDelay?: number; // Transfer delay in milliseconds
-  taxAmount?: number; // Tax percentage as decimal
+  creatorWalletAge: number;
+  creatorTransactions: number;
+  creatorLiquidity: number;
+  initialLiquidity: number;
 }
 
 export interface EntryConditions {
-  minLiquidity: number; // Minimum liquidity in SOL
-  maxMintAge: number; // Maximum age for entry in milliseconds
-  maxPriceImpact: number; // Maximum price impact as decimal
-  minHolders: number; // Minimum number of unique holders
-  maxTaxRate: number; // Maximum tax rate as decimal
-  minDEXPairs: number; // Minimum number of DEX pairs
+  minLiquidity: number;
+  maxMintAge: number;
+  maxPriceImpact: number;
+  minHolders: number;
+  maxTaxRate: number;
+  minDEXPairs: number;
 }
 
 export interface RiskParameters {
-  maxPositionSize: number; // Maximum position size as portfolio percentage
-  maxDailyExposure: number; // Maximum daily exposure as portfolio percentage
-  stopLossLevel: number; // Stop loss level as decimal
+  maxPositionSize: number;
+  maxDailyExposure: number;
+  stopLossLevel: number;
   profitTargets: {
-    quick: number; // Quick profit target as decimal
-    target: number; // Main profit target as decimal
-    moon: number; // Moon bag target as decimal
+    quick: number;
+    target: number;
+    moon: number;
   };
+}
+
+export interface SniperConfig {
+  validation: TokenValidation;
+  entry: EntryConditions;
+  risk: RiskParameters;
 }
 
 export interface TokenAnalysis {
@@ -161,5 +160,26 @@ export interface LiquidityData {
     isLocked: boolean;
     lockDuration?: number;
     isSuspicious: boolean;
+  };
+}
+
+export interface TradeResult {
+  txHash: string;
+  status: "PENDING" | "CONFIRMED" | "FAILED";
+  error?: string;
+  timestamp: number;
+  mint: string;
+  type: "BUY" | "SELL";
+  amount: number;
+  price: number;
+  fees?: {
+    network: number;
+    dex: number;
+    total: number;
+  };
+  route?: {
+    dex: string;
+    path: string[];
+    impact: number;
   };
 }
