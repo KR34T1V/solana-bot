@@ -6,12 +6,10 @@
 
 import axios from "axios";
 import type { AxiosInstance, AxiosError } from "axios";
-import type {
-  BaseProvider,
-  PriceData,
-  MarketDepth,
-} from "../../types/provider";
+import type { PriceData, MarketDepth } from "../../types/provider";
 import { logger } from "../logging.service";
+import type { Provider, ProviderConfig } from "../interfaces/provider";
+import { ServiceStatus } from "../core/service.manager";
 
 interface JupiterPriceResponse {
   data: {
@@ -55,26 +53,43 @@ class PriceCache {
   set(key: string, data: CachedPrice): void {
     this.cache.set(key, data);
   }
+
+  clear(): void {
+    this.cache.clear();
+  }
 }
 
-export class JupiterProvider implements BaseProvider {
+export class JupiterProvider implements Provider {
   private readonly client: AxiosInstance;
   private readonly baseUrl: string;
   private lastRequestTime: number = 0;
   private readonly minRequestInterval: number = 100; // 100ms minimum between requests
   private readonly cache: PriceCache;
+  private status: ServiceStatus = ServiceStatus.PENDING;
+  private readonly config: ProviderConfig;
 
-  constructor(baseUrl = "https://api.jup.ag") {
-    this.baseUrl = baseUrl;
-    this.cache = new PriceCache();
+  constructor(config: Partial<ProviderConfig> = {}) {
+    this.config = {
+      endpoint: config.endpoint || "https://api.jup.ag",
+      apiKey: config.apiKey,
+      timeout: config.timeout || 10000,
+      maxRetries: config.maxRetries || 3,
+      cacheTTL: config.cacheTTL || 30000,
+    };
+
+    this.baseUrl = this.config.endpoint;
+    this.cache = new PriceCache(this.config.cacheTTL);
 
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...(this.config.apiKey && {
+          Authorization: `Bearer ${this.config.apiKey}`,
+        }),
       },
-      timeout: 10000, // 10 second timeout
+      timeout: this.config.timeout,
     });
 
     // Add response interceptor for logging
@@ -96,6 +111,70 @@ export class JupiterProvider implements BaseProvider {
     );
   }
 
+  // Service interface implementation
+  getName(): string {
+    return "jupiter-provider";
+  }
+
+  getStatus(): ServiceStatus {
+    return this.status;
+  }
+
+  async start(): Promise<void> {
+    try {
+      this.status = ServiceStatus.STARTING;
+      logger.info("Starting Jupiter provider...");
+
+      // Test connection
+      await this.client.get("/health");
+
+      this.status = ServiceStatus.RUNNING;
+      logger.info("Jupiter provider started successfully");
+    } catch (error) {
+      this.status = ServiceStatus.ERROR;
+      logger.error("Failed to start Jupiter provider:", { error });
+      throw error;
+    }
+  }
+
+  async stop(): Promise<void> {
+    try {
+      this.status = ServiceStatus.STOPPING;
+      logger.info("Stopping Jupiter provider...");
+
+      // Clear cache and cancel any pending requests
+      this.clearCache();
+
+      this.status = ServiceStatus.STOPPED;
+      logger.info("Jupiter provider stopped successfully");
+    } catch (error) {
+      this.status = ServiceStatus.ERROR;
+      logger.error("Failed to stop Jupiter provider:", { error });
+      throw error;
+    }
+  }
+
+  // Provider interface implementation
+  getProviderName(): string {
+    return "Jupiter";
+  }
+
+  getEndpoint(): string {
+    return this.baseUrl;
+  }
+
+  isReady(): boolean {
+    return this.status === ServiceStatus.RUNNING;
+  }
+
+  getConfig(): ProviderConfig {
+    return { ...this.config };
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+
   private async rateLimit(): Promise<void> {
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequestTime;
@@ -109,7 +188,15 @@ export class JupiterProvider implements BaseProvider {
     this.lastRequestTime = Date.now();
   }
 
+  private ensureRunning(): void {
+    if (!this.isReady()) {
+      throw new Error("Jupiter provider is not running");
+    }
+  }
+
   async getPrice(tokenMint: string): Promise<PriceData> {
+    this.ensureRunning();
+
     // Check cache first
     const cachedPrice = this.cache.get(tokenMint);
     if (cachedPrice) {
@@ -176,10 +263,12 @@ export class JupiterProvider implements BaseProvider {
     _timeframe: number,
     _limit: number,
   ): Promise<never> {
+    this.ensureRunning();
     throw new Error("OHLCV data not available through Jupiter API");
   }
 
   async getOrderBook(_tokenMint: string, _limit = 100): Promise<MarketDepth> {
+    this.ensureRunning();
     throw new Error("Order book data not available through Jupiter");
   }
 }
