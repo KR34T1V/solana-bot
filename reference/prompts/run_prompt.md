@@ -1,1 +1,0 @@
-Execute the command instructions from the "{prompt_file}" file.
