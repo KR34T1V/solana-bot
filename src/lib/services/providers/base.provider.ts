@@ -74,6 +74,7 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected lastRequest: number;
   protected operationQueue: QueuedOperation<any>[] = [];
   protected isProcessingQueue: boolean = false;
+  protected readonly cacheTimeout: number = 5000; // 5 seconds default cache timeout
 
   private rateLimitStates: Map<string, RateLimitState> = new Map();
   private queueMetrics = {
@@ -124,22 +125,33 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   async start(): Promise<void> {
     try {
       if (this.status === ServiceStatus.RUNNING) {
-        throw new ServiceError(
+        const error = new ServiceError(
           "Provider already running",
           "ALREADY_RUNNING",
           false,
         );
+        this.logger.error(error.message, { provider: this.getName() });
+        throw error;
       }
 
+      const previousStatus = this.status;
       this.status = ServiceStatus.STARTING;
       this.logger.info("Starting provider", { provider: this.getName() });
 
-      await this.initializeProvider();
-
-      this.status = ServiceStatus.RUNNING;
-      this.logger.info("Provider started", { provider: this.getName() });
+      try {
+        await this.initializeProvider();
+        this.status = ServiceStatus.RUNNING;
+        this.logger.info("Provider started", { provider: this.getName() });
+      } catch (error) {
+        // Only set ERROR status for unexpected errors
+        if (error instanceof ServiceError) {
+          this.status = previousStatus;
+        } else {
+          this.status = ServiceStatus.ERROR;
+        }
+        throw error;
+      }
     } catch (error) {
-      this.status = ServiceStatus.ERROR;
       this.logger.error("Failed to start provider", {
         provider: this.getName(),
         error,
@@ -151,23 +163,34 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   async stop(): Promise<void> {
     try {
       if (this.status === ServiceStatus.STOPPED) {
-        throw new ServiceError(
+        const error = new ServiceError(
           "Provider already stopped",
           "ALREADY_STOPPED",
           false,
         );
+        this.logger.error(error.message, { provider: this.getName() });
+        throw error;
       }
 
+      const previousStatus = this.status;
       this.status = ServiceStatus.STOPPING;
       this.logger.info("Stopping provider", { provider: this.getName() });
 
-      await this.cleanupProvider();
-      this.cache.clear();
-
-      this.status = ServiceStatus.STOPPED;
-      this.logger.info("Provider stopped", { provider: this.getName() });
+      try {
+        await this.cleanupProvider();
+        this.cache.clear();
+        this.status = ServiceStatus.STOPPED;
+        this.logger.info("Provider stopped", { provider: this.getName() });
+      } catch (error) {
+        // Only set ERROR status for unexpected errors
+        if (error instanceof ServiceError) {
+          this.status = previousStatus;
+        } else {
+          this.status = ServiceStatus.ERROR;
+        }
+        throw error;
+      }
     } catch (error) {
-      this.status = ServiceStatus.ERROR;
       this.logger.error("Failed to stop provider", {
         provider: this.getName(),
         error,
@@ -348,47 +371,32 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
 
     const now = Date.now();
     const windowElapsed = now - state.windowStart;
-    const timeSinceLastRequest = now - this.lastRequest;
 
-    // Calculate required delay
-    let requiredDelay = 0;
-
-    // Add minimum delay between requests if needed
-    if (timeSinceLastRequest < config.windowMs) {
-      requiredDelay = Math.max(
-        requiredDelay,
-        config.windowMs - timeSinceLastRequest,
-      );
-    }
-
-    // Add rate limit delay if needed
-    if (state.requestCount >= config.maxRequests) {
-      const windowRemainder = config.windowMs - windowElapsed;
-      requiredDelay = Math.max(
-        requiredDelay,
-        windowRemainder > 0 ? windowRemainder : config.windowMs,
-      );
-
-      // Reset state after window
-      state.windowStart = now + requiredDelay;
+    // Reset window if needed
+    if (windowElapsed >= config.windowMs) {
+      state.windowStart = now;
       state.requestCount = 0;
       state.tokenBucket = config.burstLimit;
     }
 
-    // Apply delay if needed
-    if (requiredDelay > 0) {
-      this.logger.debug("Rate limiting request", {
-        endpoint,
-        delay: requiredDelay,
-        requestCount: state.requestCount,
-        windowElapsed,
-      });
-      await new Promise((resolve) => setTimeout(resolve, requiredDelay));
+    // Check rate limits
+    if (state.requestCount >= config.maxRequests) {
+      throw new ServiceError(
+        `Rate limit exceeded for ${endpoint}`,
+        "RATE_LIMIT_EXCEEDED",
+        true,
+        {
+          windowMs: config.windowMs,
+          maxRequests: config.maxRequests,
+          currentRequests: state.requestCount,
+          windowElapsed,
+        },
+      );
     }
 
     // Update state
     state.requestCount++;
-    this.lastRequest = Date.now();
+    this.lastRequest = now;
   }
 
   protected async withRateLimit<T>(
@@ -563,6 +571,46 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
 
   protected getQueueMetrics() {
     return { ...this.queueMetrics };
+  }
+
+  protected isRateLimitError(error: unknown): boolean {
+    if (error && typeof error === "object") {
+      // Check for axios rate limit response
+      if ("isAxiosError" in error && error.isAxiosError) {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status === 429) {
+          return true;
+        }
+      }
+
+      // Check for rate limit in error message
+      if ("message" in error && typeof error.message === "string") {
+        return error.message.toLowerCase().includes("rate limit");
+      }
+    }
+    return false;
+  }
+
+  protected handleProviderError(
+    error: unknown,
+    context: string,
+    details?: Record<string, unknown>,
+  ): never {
+    if (error instanceof ServiceError) throw error;
+
+    if (this.isRateLimitError(error)) {
+      throw new ServiceError(
+        `Rate limit exceeded for ${context}`,
+        "RATE_LIMIT_EXCEEDED",
+        true,
+        { ...details, error },
+      );
+    }
+
+    throw new ServiceError(`Failed to execute ${context}`, "API_ERROR", true, {
+      ...details,
+      error,
+    });
   }
 
   // Validation methods
