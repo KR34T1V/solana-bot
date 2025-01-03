@@ -1,67 +1,108 @@
 /**
- * @file Test suite for validating functionality
- * @version 1.0.0
+ * @file Jupiter Provider Test Implementation
+ * @version 1.1.0
  * @module lib/services/providers/__tests__/jupiter.provider.test
  * @author Development Team
  * @lastModified 2025-01-02
+ *
+ * @description
+ * Implementation of the unified test framework for the Jupiter provider.
+ * Demonstrates how to extend the base framework with provider-specific
+ * test cases while maintaining standardized test coverage.
+ *
+ * Test Categories:
+ * 1. Standard Framework Tests
+ *    - Lifecycle management
+ *    - Error handling
+ *    - State transitions
+ *
+ * 2. Jupiter-Specific Tests
+ *    - Price discovery format
+ *    - Missing data handling
+ *    - Request cancellation
+ *
+ * Configuration:
+ * - Rate limiting: 10 requests per 1000ms window
+ * - Cache timeout: 5000ms
+ *
+ * Example Usage:
+ * ```bash
+ * npm test jupiter.provider
+ * ```
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Connection } from "@solana/web3.js";
+import { vi, describe, it, expect } from "vitest";
 import axios from "axios";
 import { JupiterProvider } from "../jupiter.provider";
-import { ManagedLoggingService } from "../../core/managed-logging";
-import { runProviderTestSuite } from "./shared/provider.test.suite";
+import type { ProviderTestContext } from "./shared/provider.test.framework";
+import { ProviderTestFramework } from "./shared/provider.test.framework";
+import {
+  mockData,
+  createMockLogger,
+  createMockConnection,
+  testUtils,
+} from "./shared/test.utils";
 
-// Constants for testing
-const SOL_MINT = "So11111111111111111111111111111111111111112";
-const INVALID_MINT = "invalid-mint";
-
-// Mock modules
+// Mock external dependencies
 vi.mock("axios");
+vi.mock("@solana/web3.js");
 
-vi.mock("@solana/web3.js", () => ({
-  Connection: vi.fn().mockImplementation(() => ({
-    getSlot: vi.fn().mockResolvedValue(1),
-  })),
-}));
+/**
+ * Jupiter-specific test implementation extending the unified framework.
+ * Demonstrates proper framework extension with custom test scenarios.
+ *
+ * @class JupiterProviderTest
+ * @extends ProviderTestFramework<JupiterProvider>
+ */
+class JupiterProviderTest extends ProviderTestFramework<JupiterProvider> {
+  /**
+   * Creates a new instance of the Jupiter provider for testing.
+   * Configures the provider with standard test settings.
+   *
+   * @method createInstance
+   * @returns {JupiterProvider} Configured provider instance
+   */
+  protected createInstance(): JupiterProvider {
+    return new JupiterProvider(
+      {
+        name: "jupiter-provider",
+        version: "1.0.0",
+        maxRequestsPerWindow: 5,
+      },
+      createMockLogger(),
+      createMockConnection(),
+    );
+  }
 
-vi.mock("../../core/managed-logging", () => ({
-  ManagedLoggingService: vi.fn().mockImplementation(() => ({
-    start: vi.fn().mockResolvedValue(undefined),
-    stop: vi.fn().mockResolvedValue(undefined),
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  })),
-}));
-
-describe("Jupiter Provider", () => {
-  // Run base provider test suite
-  runProviderTestSuite("Jupiter", async () => {
-    // Setup test context
+  /**
+   * Sets up the test context with Jupiter-specific mocks and data.
+   * Configures mock responses and error scenarios.
+   *
+   * @method setupContext
+   * @returns {Promise<ProviderTestContext>} Configured test context
+   */
+  protected async setupContext(): Promise<ProviderTestContext> {
     vi.clearAllMocks();
 
-    // Track request count for rate limiting
+    // Configure mock responses
     let requestCount = 0;
     const mockResponse = {
       data: {
         data: {
-          [SOL_MINT]: {
-            id: SOL_MINT,
+          [mockData.validTokenMint]: {
+            id: mockData.validTokenMint,
             type: "token",
-            price: "1.0",
+            price: mockData.priceData.price.toString(),
           },
         },
         timeTaken: 100,
       },
     };
 
+    // Setup rate limiting simulation
     vi.mocked(axios.get).mockImplementation(async () => {
       requestCount++;
       if (requestCount > 5) {
-        // Rate limit after 5 requests
         const error = new Error("Rate limit exceeded") as any;
         error.isAxiosError = true;
         error.response = {
@@ -74,125 +115,105 @@ describe("Jupiter Provider", () => {
       return mockResponse;
     });
 
-    const mockLogger = new ManagedLoggingService({
-      serviceName: "test-jupiter",
-      level: "info",
-      logDir: "./logs",
-    });
-    const mockConnection = new Connection(
-      "https://api.mainnet-beta.solana.com",
-    );
-    const provider = new JupiterProvider(
-      {
-        name: "jupiter-provider",
-        version: "1.0.0",
-        maxRequestsPerWindow: 5, // Set rate limit to match mock
-      },
-      mockLogger,
-      mockConnection,
-    );
-
+    const provider = this.createInstance();
     return {
       provider,
-      logger: mockLogger,
-      validTokenMint: SOL_MINT,
-      invalidTokenMint: INVALID_MINT,
-      mockRequest: () => provider.getPrice(SOL_MINT), // For request cancellation testing
+      logger: createMockLogger(),
+      validTokenMint: mockData.validTokenMint,
+      invalidTokenMint: mockData.invalidTokenMint,
+      mockRequest: () => provider.getPrice(mockData.validTokenMint),
     };
-  });
+  }
 
-  // Jupiter-specific tests
-  describe("Jupiter-Specific Features", () => {
-    let provider: JupiterProvider;
-    let mockLogger: ManagedLoggingService;
-    let mockConnection: Connection;
+  /**
+   * Cleans up test resources and resets mocks.
+   *
+   * @method cleanupContext
+   */
+  protected async cleanupContext(): Promise<void> {
+    vi.clearAllMocks();
+  }
 
-    beforeEach(async () => {
-      vi.clearAllMocks();
+  /**
+   * Extends the standard test suite with Jupiter-specific tests.
+   *
+   * @method runCustomTests
+   * @param {JupiterProvider} instance - Provider instance
+   * @param {ProviderTestContext} context - Test context
+   */
+  protected override runCustomTests(
+    instance: JupiterProvider,
+    context: ProviderTestContext,
+  ): void {
+    super.runCustomTests(instance, context);
+    this.runJupiterSpecificTests(instance);
+  }
 
-      // Setup axios mock
-      const mockResponse = {
-        data: {
-          data: {
-            [SOL_MINT]: {
-              id: SOL_MINT,
-              type: "token",
-              price: "1.0",
-            },
-          },
-          timeTaken: 100,
-        },
-      };
-      vi.mocked(axios.get).mockResolvedValue(mockResponse);
-
-      mockLogger = new ManagedLoggingService({
-        serviceName: "test-jupiter",
-        level: "info",
-        logDir: "./logs",
-      });
-      mockConnection = new Connection("https://api.mainnet-beta.solana.com");
-      provider = new JupiterProvider(
-        {
-          name: "jupiter-provider",
-          version: "1.0.0",
-        },
-        mockLogger,
-        mockConnection,
-      );
-
-      await provider.start();
-    });
-
-    describe("Price Discovery", () => {
-      it("should handle Jupiter-specific price response format", async () => {
-        const price = await provider.getPrice(SOL_MINT);
-        expect(price).toEqual({
-          price: 1.0,
-          timestamp: expect.any(Number),
-          confidence: 1,
-        });
-      });
-
-      it("should handle missing price data", async () => {
-        vi.mocked(axios.get).mockResolvedValueOnce({
-          data: { data: {} },
-        });
-
-        await expect(provider.getPrice(SOL_MINT)).rejects.toThrow();
-      });
-    });
-
-    describe("Request Management", () => {
-      it("should cancel pending requests on cleanup", async () => {
-        // Mock a request that never resolves but can be aborted
-        const mockGet = vi.spyOn(axios, "get").mockImplementation(() => {
-          return new Promise((_, reject) => {
-            // The request will be aborted by the provider's cleanup
-            const abortError = new Error("Request cancelled");
-            abortError.name = "AbortError";
-            reject(abortError);
+  /**
+   * Implements Jupiter-specific test cases.
+   * Tests unique features and behaviors of the Jupiter provider.
+   *
+   * @private
+   * @method runJupiterSpecificTests
+   * @param {JupiterProvider} provider - Provider instance
+   */
+  private runJupiterSpecificTests(provider: JupiterProvider): void {
+    describe("Jupiter-Specific Features", () => {
+      describe("Price Discovery", () => {
+        it("should handle Jupiter-specific price response format", async () => {
+          const price = await provider.getPrice(mockData.validTokenMint);
+          expect(price).toEqual({
+            price: mockData.priceData.price,
+            timestamp: expect.any(Number),
+            confidence: mockData.priceData.confidence,
           });
         });
 
-        // Start a request that will be cancelled
-        const pricePromise = provider.getPrice(SOL_MINT).catch((error) => {
-          // Ensure we're getting the right error
-          expect(error.message).toBe("Request cancelled");
-          expect(error.code).toBe("REQUEST_CANCELLED");
+        it("should handle missing price data", async () => {
+          vi.mocked(axios.get).mockResolvedValueOnce({
+            data: { data: {} },
+          });
+
+          await expect(
+            provider.getPrice(mockData.validTokenMint),
+          ).rejects.toThrow();
         });
+      });
 
-        // Wait a bit to ensure the request has started
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      describe("Request Management", () => {
+        it("should cancel pending requests on cleanup", async () => {
+          const mockGet = vi.spyOn(axios, "get").mockImplementation(() => {
+            return new Promise((_, reject) => {
+              const abortError = new Error("Request cancelled");
+              abortError.name = "AbortError";
+              reject(abortError);
+            });
+          });
 
-        // Stop the provider which should cancel the request
-        await provider.stop();
+          const pricePromise = provider
+            .getPrice(mockData.validTokenMint)
+            .catch((error) => {
+              expect(error.message).toBe("Request cancelled");
+              expect(error.code).toBe("REQUEST_CANCELLED");
+            });
 
-        // Wait for the promise to complete
-        await pricePromise;
-
-        // Cleanup
-        mockGet.mockRestore();
+          await testUtils.delay(100);
+          await provider.stop();
+          await pricePromise;
+          mockGet.mockRestore();
+        });
       });
     });
-  });
-});
+  }
+}
+
+// Initialize and run the test suite
+new JupiterProviderTest({
+  rateLimitTests: {
+    requestCount: 10,
+    windowMs: 1000,
+  },
+  cacheTests: {
+    cacheTimeoutMs: 5000,
+  },
+}).runTests("Jupiter Provider");
