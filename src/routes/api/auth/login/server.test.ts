@@ -8,8 +8,11 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { POST } from "../login/+server";
-import { createRequestEvent } from "$tests/utils/testHelpers";
-import { validLoginCredentials, mockUser } from "$tests/fixtures/auth";
+import { createRequestEvent } from "../../../../tests/utils/testHelpers";
+import {
+  validLoginCredentials,
+  mockUser,
+} from "../../../../tests/fixtures/auth";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

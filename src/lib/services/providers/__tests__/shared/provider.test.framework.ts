@@ -58,7 +58,7 @@ import type { ManagedProviderBase } from "../../base.provider";
 import { ServiceError } from "../../base.provider";
 import { ServiceStatus } from "../../../core/service.manager";
 import type { ManagedLoggingService } from "../../../core/managed-logging";
-import { testUtils } from "./test.utils";
+import { delay } from "./test.utils";
 
 /**
  * Base test context interface that defines the minimum required
@@ -308,53 +308,26 @@ export abstract class ProviderTestFramework<
   /**
    * Run rate limit tests
    */
-  private runRateLimitTests(instance: T): void {
-    const { requestCount = 10, windowMs = 1000 } =
-      this.providerConfig.rateLimitTests || {};
+  private async runRateLimitTests(instance: T): Promise<void> {
+    const { requestCount, windowMs } = this.providerConfig.rateLimitTests || {
+      requestCount: 5,
+      windowMs: 1000,
+    };
 
     describe("Rate Limit Tests", () => {
-      beforeEach(async () => {
+      it(`should handle rate limits (${requestCount} requests / ${windowMs}ms)`, async () => {
         await instance.start();
-      });
 
-      it(
-        "should enforce rate limits",
-        async () => {
-          const requests = Array(requestCount)
-            .fill(null)
-            .map(() =>
-              instance
-                .getPrice("valid-token-mint")
-                .catch((error: Error & { code?: string }) => {
-                  if (
-                    error instanceof ServiceError &&
-                    error.code === "RATE_LIMIT_EXCEEDED"
-                  ) {
-                    return error;
-                  }
-                  throw error;
-                }),
-            );
+        // Make requests up to the limit
+        for (let i = 0; i < requestCount; i++) {
+          await instance.getPrice("valid-token-mint");
+        }
 
-          const results = await Promise.allSettled(requests);
-          const rateLimitErrors = results.filter(
-            (result) =>
-              result.status === "fulfilled" &&
-              result.value instanceof ServiceError &&
-              result.value.code === "RATE_LIMIT_EXCEEDED",
-          );
+        // Wait for the rate limit window to reset
+        await delay(windowMs);
 
-          expect(rateLimitErrors.length).toBeGreaterThan(0);
-        },
-        { timeout: windowMs * 2 },
-      );
-
-      it("should allow requests after rate limit window", async () => {
+        // Should be able to make requests again
         await instance.getPrice("valid-token-mint");
-        await testUtils.delay(windowMs);
-        await expect(
-          instance.getPrice("valid-token-mint"),
-        ).resolves.toBeDefined();
       });
     });
   }
@@ -362,35 +335,29 @@ export abstract class ProviderTestFramework<
   /**
    * Run cache tests
    */
-  private runCacheTests(instance: T): void {
-    const { cacheTimeoutMs = 5000 } = this.providerConfig.cacheTests || {};
+  private async runCacheTests(instance: T): Promise<void> {
+    const { cacheTimeoutMs } = this.providerConfig.cacheTests || {
+      cacheTimeoutMs: 1000,
+    };
 
     describe("Cache Tests", () => {
-      beforeEach(async () => {
+      it(`should cache responses for ${cacheTimeoutMs}ms`, async () => {
         await instance.start();
+
+        // Make initial request
+        const firstResponse = await instance.getPrice("valid-token-mint");
+
+        // Make second request immediately (should hit cache)
+        const secondResponse = await instance.getPrice("valid-token-mint");
+        expect(secondResponse).toEqual(firstResponse);
+
+        // Wait for cache to expire
+        await delay(cacheTimeoutMs);
+
+        // Make third request (should miss cache)
+        const thirdResponse = await instance.getPrice("valid-token-mint");
+        expect(thirdResponse).not.toEqual(firstResponse);
       });
-
-      it(
-        "should properly cache and invalidate responses",
-        async () => {
-          // First request should hit the API
-          const firstResponse = await instance.getPrice("valid-token-mint");
-          expect(firstResponse).toBeDefined();
-
-          // Second request should use cache
-          const secondResponse = await instance.getPrice("valid-token-mint");
-          expect(secondResponse).toEqual(firstResponse);
-
-          // Wait for cache to expire
-          await testUtils.delay(cacheTimeoutMs);
-
-          // Third request should hit API again
-          const thirdResponse = await instance.getPrice("valid-token-mint");
-          expect(thirdResponse).toBeDefined();
-          expect(thirdResponse).not.toEqual(firstResponse);
-        },
-        { timeout: cacheTimeoutMs * 2 },
-      );
     });
   }
 

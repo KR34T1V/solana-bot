@@ -7,13 +7,13 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { POST } from "./+server";
-import { createRequestEvent } from "$tests/utils/testHelpers";
+import { POST } from "../register/+server";
+import { createRequestEvent } from "../../../../tests/utils/testHelpers";
 import {
   validRegistrationData,
   invalidRegistrationData,
   mockUser,
-} from "$tests/fixtures/auth";
+} from "../../../../tests/fixtures/auth";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();

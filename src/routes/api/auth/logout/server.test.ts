@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { POST } from "./+server";
-import { createRequestEvent } from "$tests/utils/testHelpers";
-import { mockUser } from "$tests/fixtures/auth";
+import { POST } from "../logout/+server";
+import { createRequestEvent } from "../../../../tests/utils/testHelpers";
+import { mockUser } from "../../../../tests/fixtures/auth";
 import { generateToken } from "$lib/utils/jwt";
 
 describe("POST /api/auth/logout", () => {

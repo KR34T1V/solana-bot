@@ -17,6 +17,14 @@ import type {
   ProviderCapabilities,
 } from "../../types/provider";
 
+export type {
+  BaseProvider,
+  PriceData,
+  OHLCVData,
+  MarketDepth,
+  ProviderCapabilities,
+};
+
 export class ServiceError extends Error {
   constructor(
     message: string,
