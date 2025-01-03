@@ -79,6 +79,30 @@ export interface TokenValidation {
   lastChecked: number;
 }
 
+export interface LPTokenData {
+  totalSupply: number;
+  locked: number;
+  lockDuration?: number;
+  vestingSchedules?: {
+    startTime: number;
+    endTime: number;
+    amount: number;
+    released: number;
+  }[];
+}
+
+export interface CreatorData {
+  address: string;
+  tokenBalance: number;
+  percentageOwned: number;
+  verificationStatus: "VERIFIED" | "UNVERIFIED";
+  projectHistory?: {
+    totalProjects: number;
+    successfulProjects: number;
+    rugPullCount: number;
+  };
+}
+
 export interface ProviderCapabilities {
   canGetPrice: boolean;
   canGetOHLCV: boolean;
@@ -86,9 +110,21 @@ export interface ProviderCapabilities {
   canGetMetadata?: boolean;
   canVerifyCreators?: boolean;
   canValidateToken?: boolean;
+  canGetLPInfo?: boolean;
+  canGetCreatorInfo?: boolean;
 }
 
 export interface BaseProvider {
+  /**
+   * Start the provider
+   */
+  start(): Promise<void>;
+
+  /**
+   * Stop the provider and clean up resources
+   */
+  stop(): Promise<void>;
+
   /**
    * Get current price for a token
    * @throws {Error} If price data is not available
@@ -110,6 +146,18 @@ export interface BaseProvider {
    * @throws {Error} If order book data is not available
    */
   getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth>;
+
+  /**
+   * Get LP token information for a pool
+   * @throws {Error} If LP info is not available
+   */
+  getLPInfo?(poolAddress: string): Promise<LPTokenData>;
+
+  /**
+   * Get creator information for a token
+   * @throws {Error} If creator info is not available
+   */
+  getCreatorInfo?(tokenMint: string): Promise<CreatorData>;
 
   /**
    * Get provider capabilities
