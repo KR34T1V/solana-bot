@@ -78,6 +78,89 @@ Key features:
 - Program account monitoring
 - Price impact calculation
 
+### MetaplexProvider
+
+The MetaplexProvider is responsible for token metadata validation, creator verification, and risk analysis.
+
+### Features
+
+#### Metadata Validation
+
+- Fetches and validates token metadata from Metaplex
+- Caches metadata for performance optimization (5 minute TTL)
+- Validates essential metadata fields (name, symbol, URI)
+
+#### Creator Verification
+
+- Analyzes creator history and verification status
+- Caches creator data for 30 minutes
+- Calculates creator risk scores based on:
+  - Total projects
+  - Successful projects
+  - Verification status
+  - Project history
+
+#### Risk Analysis
+
+Risk factors are identified with severity levels (LOW, MEDIUM, HIGH):
+
+| Code               | Severity | Description                      |
+| ------------------ | -------- | -------------------------------- |
+| NO_CREATOR_INFO    | HIGH     | No creator information available |
+| UNVERIFIED_CREATOR | HIGH     | Token creator is not verified    |
+| MUTABLE_METADATA   | MEDIUM   | Token metadata can be changed    |
+| HIGH_RISK_CREATOR  | HIGH     | Creator has high risk score      |
+| MISSING_NAME       | MEDIUM   | Token name is missing            |
+| MISSING_SYMBOL     | MEDIUM   | Token symbol is missing          |
+
+#### Risk Scoring
+
+Token risk scores are calculated using weighted factors:
+
+- Creator verification (40%)
+- Metadata quality (30%)
+- Mutability risk (30%)
+
+### Usage
+
+```typescript
+const provider = new MetaplexProvider(config, logger, connection);
+await provider.start();
+
+// Fetch metadata
+const metadata = await provider.getMetadata(mintAddress);
+
+// Verify creator
+const creatorVerification = await provider.verifyCreator(creatorAddress);
+
+// Validate token
+const validation = await provider.validateToken(mintAddress);
+console.log(validation.riskFactors, validation.riskScore);
+```
+
+### Error Handling
+
+- Implements retry logic for network failures
+- Caches data to reduce API load
+- Graceful degradation when services are unavailable
+
+### Testing
+
+Comprehensive test suite covering:
+
+- Metadata operations
+- Creator verification
+- Risk factor identification
+- Token validation
+- Cache functionality
+
+### Best Practices
+
+1. Always check risk factors before trading
+2. Monitor creator verification status
+3. Be cautious of mutable metadata
+4. Consider historical creator performance
+
 ## Configuration
 
 ### Environment Variables

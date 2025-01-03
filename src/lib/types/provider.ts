@@ -27,10 +27,65 @@ export interface MarketDepth {
   timestamp: number;
 }
 
+export interface MetaplexData {
+  mint: string;
+  name: string;
+  symbol: string;
+  uri: string;
+  sellerFeeBasisPoints: number;
+  creators: {
+    address: string;
+    verified: boolean;
+    share: number;
+  }[];
+  collection?: {
+    verified: boolean;
+    key: string;
+  };
+  uses?: {
+    useMethod: number;
+    remaining: number;
+    total: number;
+  };
+  isMutable: boolean;
+  primarySaleHappened: boolean;
+  updateAuthority: string;
+}
+
+export interface CreatorVerification {
+  address: string;
+  isVerified: boolean;
+  verificationMethod: "METAPLEX" | "MANUAL" | "NONE";
+  signatureValid: boolean;
+  projectHistory: {
+    totalProjects: number;
+    successfulProjects: number;
+    rugPullCount: number;
+    averageProjectDuration: number;
+  };
+  riskScore: number;
+}
+
+export interface TokenValidation {
+  isValid: boolean;
+  metadata: MetaplexData;
+  creator: CreatorVerification;
+  riskFactors: {
+    code: string;
+    severity: "LOW" | "MEDIUM" | "HIGH";
+    description: string;
+  }[];
+  riskScore: number;
+  lastChecked: number;
+}
+
 export interface ProviderCapabilities {
   canGetPrice: boolean;
   canGetOHLCV: boolean;
   canGetOrderBook: boolean;
+  canGetMetadata?: boolean;
+  canVerifyCreators?: boolean;
+  canValidateToken?: boolean;
 }
 
 export interface BaseProvider {
