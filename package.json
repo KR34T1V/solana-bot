@@ -17,7 +17,7 @@
     "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest",
+    "test": "vitest --reporter verbose",
     "test:ui": "vitest --ui",
     "test:staged": "bash scripts/test-staged.sh",
     "test:coverage": "mkdir -p coverage && vitest run --coverage",

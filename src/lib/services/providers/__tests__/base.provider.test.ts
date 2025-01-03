@@ -115,10 +115,88 @@ describe("Base Provider", () => {
     });
 
     describe("Initialization", () => {
-      it.todo("should validate configuration on startup");
-      it.todo("should initialize internal state correctly");
-      it.todo("should setup error handlers");
-      it.todo("should configure rate limiting");
+      it("should validate configuration on startup", () => {
+        // Test required config fields
+        expect(
+          () => new TestProvider({ name: "", version: "1.0.0" }, mockLogger),
+        ).toThrow("Provider name cannot be empty");
+
+        expect(
+          () => new TestProvider({ name: "test", version: "" }, mockLogger),
+        ).toThrow("Provider version cannot be empty");
+
+        // Test config defaults
+        const provider = new TestProvider(
+          { name: "test", version: "1.0.0" },
+          mockLogger,
+        );
+        expect(provider["config"]).toEqual({
+          name: "test",
+          version: "1.0.0",
+          cacheTimeout: 30000,
+          retryAttempts: 3,
+          rateLimitMs: 100,
+        });
+      });
+
+      it("should initialize internal state correctly", () => {
+        const provider = new TestProvider(
+          { name: "test", version: "1.0.0" },
+          mockLogger,
+        );
+
+        // Check initial state
+        expect(provider.getStatus()).toBe(ServiceStatus.PENDING);
+        expect(provider["cache"]).toBeInstanceOf(Map);
+        expect(provider["cache"].size).toBe(0);
+        expect(provider["lastRequest"]).toBe(0);
+        expect(provider["logger"]).toBe(mockLogger);
+      });
+
+      it("should setup error handlers", async () => {
+        const provider = new TestProvider(
+          { name: "test", version: "1.0.0" },
+          mockLogger,
+        );
+
+        // Mock initializeProvider to throw
+        vi.spyOn(provider as any, "initializeProvider").mockRejectedValueOnce(
+          new Error("Initialization failed"),
+        );
+
+        // Test error handling during start
+        await expect(provider.start()).rejects.toThrow("Initialization failed");
+        expect(provider.getStatus()).toBe(ServiceStatus.ERROR);
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          "Failed to start provider",
+          expect.objectContaining({
+            provider: "test",
+            error: expect.any(Error),
+          }),
+        );
+      });
+
+      it("should configure rate limiting", async () => {
+        // Test custom rate limit
+        const customProvider = new TestProvider(
+          {
+            name: "test",
+            version: "1.0.0",
+            rateLimitMs: 200,
+          },
+          mockLogger,
+        );
+
+        const start = Date.now();
+        await customProvider.start();
+
+        // Make two requests that should be rate limited
+        await customProvider.getPrice("test-token");
+        await customProvider.getPrice("test-token");
+
+        const duration = Date.now() - start;
+        expect(duration).toBeGreaterThanOrEqual(200);
+      });
     });
 
     describe("Cleanup", () => {

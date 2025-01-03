@@ -50,6 +50,22 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected lastRequest: number = 0;
 
   constructor(config: ProviderConfig, logger: ManagedLoggingService) {
+    // Validate required config fields
+    if (!config.name || config.name.trim() === "") {
+      throw new ServiceError(
+        "Provider name cannot be empty",
+        "INVALID_CONFIG",
+        false,
+      );
+    }
+    if (!config.version || config.version.trim() === "") {
+      throw new ServiceError(
+        "Provider version cannot be empty",
+        "INVALID_CONFIG",
+        false,
+      );
+    }
+
     this.config = {
       cacheTimeout: 30000, // 30 seconds
       retryAttempts: 3,
