@@ -164,3 +164,18 @@ export interface BaseProvider {
    */
   getCapabilities(): ProviderCapabilities;
 }
+
+/**
+ * Configuration for rate limiting provider operations
+ * @interface RateLimitConfig
+ * @property {number} windowMs - Time window in milliseconds for rate limiting
+ * @property {number} maxRequests - Maximum number of requests allowed in the window
+ * @property {number} burstLimit - Number of additional requests allowed to burst
+ * @property {number} priority - Priority level for request processing (higher = more priority)
+ */
+export interface RateLimitConfig {
+  windowMs: number;
+  maxRequests: number;
+  burstLimit: number;
+  priority: number;
+}
