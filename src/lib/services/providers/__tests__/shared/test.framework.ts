@@ -4,13 +4,11 @@
  * @module lib/services/providers/__tests__/shared/test.framework
  * @author Development Team
  * @lastModified 2025-01-02
- * @description A comprehensive testing framework for service providers with metadata support
+ * @description A comprehensive testing framework for service providers
  */
 
-import "reflect-metadata";
-import { expect } from "vitest";
+import { describe, it, beforeEach, afterEach } from "vitest";
 import type { Service } from "../../../interfaces/service";
-import type { BaseProvider } from "../../../../types/provider";
 import { ServiceStatus } from "../../../core/service.manager";
 import type { ManagedLoggingService } from "../../../core/managed-logging";
 
@@ -52,7 +50,7 @@ export interface TestContext {
 /**
  * Test metadata interface
  * @interface TestMetadata
- * @description Configuration options for test methods
+ * @description Configuration for individual tests
  */
 export interface TestMetadata {
   category: TestCategory;
@@ -63,11 +61,88 @@ export interface TestMetadata {
 }
 
 /**
- * Response type mapping
+ * Test case interface
+ * @interface TestCase
+ * @description Represents a single test case with its metadata and implementation
+ */
+export interface TestCase {
+  name: string;
+  metadata: TestMetadata;
+  implementation: () => Promise<void>;
+}
+
+/**
+ * Base test suite class
+ * @class BaseTestSuite
+ * @description Abstract base class for all test suites
+ */
+export abstract class BaseTestSuite<T extends Service> {
+  private tests: Map<string, TestCase> = new Map();
+
+  protected abstract createInstance(): T;
+  protected abstract setupContext(): Promise<TestContext>;
+  protected abstract cleanupContext(): Promise<void>;
+
+  /**
+   * Register a test case
+   * @param {string} name - Name of the test
+   * @param {TestMetadata} metadata - Test metadata
+   * @param {Function} implementation - Test implementation
+   */
+  protected registerTest(
+    name: string,
+    metadata: TestMetadata,
+    implementation: () => Promise<void>,
+  ): void {
+    this.tests.set(name, { name, metadata, implementation });
+  }
+
+  /**
+   * Run all registered tests
+   * @param {string} suiteName - Name of the test suite
+   */
+  public runTests(suiteName: string): void {
+    describe(suiteName, () => {
+      let instance: T;
+
+      beforeEach(async () => {
+        instance = this.createInstance();
+        await this.setupContext();
+      });
+
+      afterEach(async () => {
+        if (instance?.getStatus() !== ServiceStatus.STOPPED) {
+          await instance?.stop();
+        }
+        await this.cleanupContext();
+      });
+
+      // Run all registered tests
+      for (const [name, testCase] of this.tests) {
+        it(name, async () => {
+          console.log(`Running test: ${testCase.metadata.description}`);
+          console.log(
+            `Category: ${testCase.metadata.category}, Priority: ${testCase.metadata.priority}`,
+          );
+
+          try {
+            await testCase.implementation();
+          } catch (error) {
+            console.error(`Test failed: ${name}`, error);
+            throw error;
+          }
+        });
+      }
+    });
+  }
+}
+
+/**
+ * Mock response types interface
  * @interface MockResponseTypes
  * @description Type definitions for mock responses
  */
-export type MockResponseTypes = {
+export interface MockResponseTypes {
   price: {
     data: {
       price: string;
@@ -78,204 +153,6 @@ export type MockResponseTypes = {
     bids: [number, number][];
     asks: [number, number][];
   };
-};
-
-/**
- * Test method types
- * @type TestMethod
- * @description Type definition for test methods
- */
-export type TestMethod = (...args: any[]) => Promise<void>;
-
-/**
- * Decorated test method type
- * @type DecoratedTestMethod
- * @description Type definition for test methods with metadata
- */
-export type DecoratedTestMethod = TestMethod & {
-  __testMetadata?: TestMetadata;
-};
-
-/**
- * Reflect metadata key - exported for testing
- * @const TEST_METADATA_KEY
- * @description Symbol used for storing test metadata
- */
-export const TEST_METADATA_KEY = Symbol("testMetadata");
-
-/**
- * Test decorator factory for adding metadata to test methods
- * @function Test
- * @description Decorates test methods with metadata and provides test execution wrapper
- * @param {TestMetadata} metadata - Configuration for the test including category, priority, and description
- * @returns {MethodDecorator} A decorator that adds metadata and wraps the test method
- * @throws {Error} If decorator is applied to non-method or method is not a function
- */
-export function Test(metadata: TestMetadata): MethodDecorator {
-  return (
-    target: object,
-    propertyKey: string | symbol,
-    descriptor: TypedPropertyDescriptor<any>,
-  ): TypedPropertyDescriptor<any> => {
-    if (!descriptor.value || typeof descriptor.value !== "function") {
-      throw new Error("Test decorator can only be applied to methods");
-    }
-
-    const originalMethod = descriptor.value;
-
-    // Store metadata on the prototype
-    Reflect.defineMetadata(
-      TEST_METADATA_KEY,
-      metadata,
-      target,
-      propertyKey.toString(),
-    );
-
-    // Create wrapped method
-    descriptor.value = async function (
-      this: unknown,
-      ...args: unknown[]
-    ): Promise<void> {
-      const testName = propertyKey.toString();
-      console.log(`Running test: ${metadata.description}`);
-      console.log(
-        `Category: ${metadata.category}, Priority: ${metadata.priority}`,
-      );
-
-      try {
-        await originalMethod.apply(this, args);
-      } catch (error) {
-        console.error(`Test failed: ${testName}`, error);
-        throw error;
-      }
-    };
-
-    return descriptor;
-  };
-}
-
-/**
- * Base test suite that all provider tests will extend
- * @abstract
- * @class BaseTestSuite
- * @template T - Type extending BaseProvider & Service
- * @description Provides base functionality for testing service providers
- */
-export abstract class BaseTestSuite<T extends BaseProvider & Service> {
-  protected abstract createTestContext(): Promise<TestContext>;
-  protected abstract createProvider(): T;
-
-  private context: TestContext | null = null;
-  protected provider: T | null = null;
-
-  /**
-   * Runs a specific test method by name
-   * @method runTest
-   * @description Executes a test method with the given name
-   * @param {string} methodName - Name of the test method to run
-   * @returns {Promise<void>}
-   * @throws {Error} If method not found or no metadata found
-   */
-  public async runTest(methodName: string): Promise<void> {
-    const method = this[methodName as keyof this];
-    if (typeof method !== "function") {
-      throw new Error(`Test method ${methodName} not found`);
-    }
-
-    const metadata = Reflect.getMetadata(
-      TEST_METADATA_KEY,
-      this,
-      methodName,
-    ) as TestMetadata | undefined;
-
-    if (!metadata) {
-      throw new Error(`No test metadata found for method ${methodName}`);
-    }
-
-    await method.call(this);
-  }
-
-  /**
-   * Sets up the test suite before each test
-   * @method setup
-   * @description Initializes test context and provider
-   * @returns {Promise<void>}
-   */
-  public async setup(): Promise<void> {
-    await this.beforeEach();
-  }
-
-  /**
-   * Tears down the test suite after each test
-   * @method teardown
-   * @description Cleans up test context and provider
-   * @returns {Promise<void>}
-   */
-  public async teardown(): Promise<void> {
-    await this.afterEach();
-  }
-
-  @Test({
-    category: TestCategory.LIFECYCLE,
-    priority: TestPriority.CRITICAL,
-    description: "Provider initialization",
-  })
-  protected async testInitialization(): Promise<void> {
-    const provider = this.createProvider();
-    expect(provider).toBeDefined();
-  }
-
-  @Test({
-    category: TestCategory.LIFECYCLE,
-    priority: TestPriority.CRITICAL,
-    description: "Provider startup",
-  })
-  protected async testStartup(): Promise<void> {
-    const provider = this.createProvider();
-    await provider.start();
-    expect(provider.getStatus()).toBe(ServiceStatus.RUNNING);
-  }
-
-  @Test({
-    category: TestCategory.LIFECYCLE,
-    priority: TestPriority.CRITICAL,
-    description: "Provider shutdown",
-  })
-  protected async testShutdown(): Promise<void> {
-    const provider = this.createProvider();
-    await provider.start();
-    await provider.stop();
-    expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
-  }
-
-  /**
-   * Setup method called before each test
-   * @method beforeEach
-   * @description Sets up test context and provider
-   * @protected
-   * @returns {Promise<void>}
-   */
-  protected async beforeEach(): Promise<void> {
-    this.context = await this.createTestContext();
-    this.provider = this.createProvider();
-    await this.provider.start();
-  }
-
-  /**
-   * Cleanup method called after each test
-   * @method afterEach
-   * @description Cleans up test context and provider
-   * @protected
-   * @returns {Promise<void>}
-   */
-  protected async afterEach(): Promise<void> {
-    if (this.provider) {
-      await this.provider.stop();
-    }
-    if (this.context) {
-      await this.context.cleanup();
-    }
-  }
 }
 
 /**

@@ -6,17 +6,13 @@
  * @lastModified 2025-01-02
  */
 
-import "reflect-metadata";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, expect } from "vitest";
 import {
   BaseTestSuite,
-  Test,
   TestCategory,
   TestPriority,
   type TestContext,
-  TEST_METADATA_KEY,
 } from "../shared/test.framework";
-import { assertions } from "../shared/test.assertions";
 import { createMockLogger } from "../shared/test.utils";
 import type { Service } from "../../../interfaces/service";
 import { ServiceStatus } from "../../../core/service.manager";
@@ -28,7 +24,6 @@ import type {
   MarketDepth,
   ProviderCapabilities,
 } from "../../../../types/provider";
-import { mockErrors } from "../shared/mock.data";
 
 // Mock service for testing the framework
 class MockService implements Service, BaseProvider {
@@ -96,130 +91,97 @@ class MockService implements Service, BaseProvider {
 // Test suite for testing the framework itself
 class FrameworkTestSuite extends BaseTestSuite<MockService> {
   private mockLogger!: ManagedLoggingService;
+  private mockService!: MockService;
 
-  protected async createTestContext(): Promise<TestContext> {
+  constructor() {
+    super();
+    this.registerTests();
+  }
+
+  protected createInstance(): MockService {
+    this.mockService = new MockService();
+    return this.mockService;
+  }
+
+  protected async setupContext(): Promise<TestContext> {
     this.mockLogger = createMockLogger();
     return {
       logger: this.mockLogger,
       cleanup: async () => {
-        // Cleanup resources
+        // Cleanup mock resources
       },
     };
   }
 
-  protected createProvider(): MockService {
-    return new MockService();
+  protected async cleanupContext(): Promise<void> {
+    // No cleanup needed for mocks
   }
 
-  @Test({
-    category: TestCategory.UNIT,
-    priority: TestPriority.CRITICAL,
-    description: "Test decorator should preserve metadata",
-  })
-  protected async testDecoratorMetadata(): Promise<void> {
-    // Get metadata from the method
-    const metadata = Reflect.getMetadata(
-      TEST_METADATA_KEY,
-      this,
-      "testDecoratorMetadata",
+  private registerTests(): void {
+    this.registerTest(
+      "Service Lifecycle",
+      {
+        category: TestCategory.LIFECYCLE,
+        priority: TestPriority.CRITICAL,
+        description: "Test service lifecycle management",
+      },
+      async () => {
+        const service = this.mockService;
+        expect(service.getStatus()).toBe(ServiceStatus.PENDING);
+        await service.start();
+        expect(service.getStatus()).toBe(ServiceStatus.RUNNING);
+        await service.stop();
+        expect(service.getStatus()).toBe(ServiceStatus.STOPPED);
+      },
     );
 
-    // Verify metadata
-    expect(metadata).toBeDefined();
-    expect(metadata.category).toBe(TestCategory.UNIT);
-    expect(metadata.priority).toBe(TestPriority.CRITICAL);
-  }
+    this.registerTest(
+      "Service State Transitions",
+      {
+        category: TestCategory.LIFECYCLE,
+        priority: TestPriority.HIGH,
+        description: "Test service state transitions",
+      },
+      async () => {
+        const service = this.mockService;
+        expect(service.getStartCount()).toBe(0);
+        expect(service.getStopCount()).toBe(0);
 
-  @Test({
-    category: TestCategory.UNIT,
-    priority: TestPriority.HIGH,
-    description: "Service lifecycle methods should be called correctly",
-  })
-  protected async testServiceLifecycle(): Promise<void> {
-    const service = this.provider as MockService;
+        await service.start();
+        expect(service.getStartCount()).toBe(1);
+        expect(service.getStopCount()).toBe(0);
 
-    // Verify initial state
-    expect(service.getStartCount()).toBe(1); // Called in beforeEach
-    expect(service.getStopCount()).toBe(0);
-    expect(service.getStatus()).toBe(ServiceStatus.RUNNING);
-
-    // Stop service
-    await service.stop();
-    expect(service.getStopCount()).toBe(1);
-    expect(service.getStatus()).toBe(ServiceStatus.STOPPED);
-
-    // Restart service
-    await service.start();
-    expect(service.getStartCount()).toBe(2);
-    expect(service.getStatus()).toBe(ServiceStatus.RUNNING);
-  }
-
-  @Test({
-    category: TestCategory.ERROR_HANDLING,
-    priority: TestPriority.HIGH,
-    description: "Test assertions should work correctly",
-  })
-  protected async testAssertions(): Promise<void> {
-    // Test service status assertion
-    const statusResult = assertions.expectServiceStatus(
-      ServiceStatus.RUNNING,
-      ServiceStatus.RUNNING,
+        await service.stop();
+        expect(service.getStartCount()).toBe(1);
+        expect(service.getStopCount()).toBe(1);
+      },
     );
-    expect(statusResult.success).toBe(true);
 
-    const invalidStatusResult = assertions.expectServiceStatus(
-      ServiceStatus.RUNNING,
-      ServiceStatus.STOPPED,
+    this.registerTest(
+      "Error Handling",
+      {
+        category: TestCategory.ERROR_HANDLING,
+        priority: TestPriority.HIGH,
+        description: "Test error handling in service operations",
+      },
+      async () => {
+        const service = this.mockService;
+        await expect(service.getPrice("test")).rejects.toThrow(
+          "Not implemented",
+        );
+        await expect(service.getOHLCV("test", 1, 1)).rejects.toThrow(
+          "Not implemented",
+        );
+        await expect(service.getOrderBook("test")).rejects.toThrow(
+          "Not implemented",
+        );
+      },
     );
-    expect(invalidStatusResult.success).toBe(false);
-    expect(invalidStatusResult.message).toBeDefined();
-
-    // Test error assertion
-    const errorPromise = Promise.reject(
-      new Error(mockErrors.RATE_LIMIT.message),
-    );
-    const errorResult = await assertions.expectRejects(
-      errorPromise,
-      "RATE_LIMIT",
-    );
-    expect(errorResult.success).toBe(true);
   }
 }
 
+// Run the framework tests
 describe("Test Framework", () => {
-  let testSuite: FrameworkTestSuite;
-
-  beforeEach(async () => {
-    testSuite = new FrameworkTestSuite();
-    await testSuite.setup();
-  });
-
-  afterEach(async () => {
-    await testSuite.teardown();
-  });
-
-  it("should handle decorator metadata correctly", async () => {
-    await testSuite.runTest("testDecoratorMetadata");
-  });
-
-  it("should manage service lifecycle correctly", async () => {
-    await testSuite.runTest("testServiceLifecycle");
-  });
-
-  it("should handle assertions correctly", async () => {
-    await testSuite.runTest("testAssertions");
-  });
-
-  // Test the base lifecycle tests
-  it("should run initialization test", async () => {
-    await testSuite.runTest("testInitialization");
-  });
-
-  it("should run startup test", async () => {
-    await testSuite.runTest("testStartup");
-  });
-
-  it("should run shutdown test", async () => {
-    await testSuite.runTest("testShutdown");
-  });
+  const testSuite = new FrameworkTestSuite();
+  testSuite.runTests("Framework Tests");
 });
