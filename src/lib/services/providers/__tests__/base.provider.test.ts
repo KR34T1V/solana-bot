@@ -200,10 +200,61 @@ describe("Base Provider", () => {
     });
 
     describe("Cleanup", () => {
-      it.todo("should cleanup resources on shutdown");
-      it.todo("should cancel pending operations");
-      it.todo("should clear internal state");
-      it.todo("should emit shutdown events");
+      it("should cleanup resources on shutdown", async () => {
+        // Setup mock cleanup
+        const cleanupSpy = vi.spyOn(provider as any, "cleanupProvider");
+        const cacheSpy = vi.spyOn(provider["cache"], "clear");
+        
+        // Start and stop provider
+        await provider.start();
+        await provider.stop();
+        
+        // Verify cleanup
+        expect(cleanupSpy).toHaveBeenCalledTimes(1);
+        expect(cacheSpy).toHaveBeenCalledTimes(1);
+        expect(provider["cache"].size).toBe(0);
+      });
+
+      it("should cancel pending operations", async () => {
+        // Setup a pending operation
+        const pendingOperation = provider.getPrice("test-token");
+        
+        // Stop provider before operation completes
+        await provider.stop();
+        
+        // Verify operation is rejected
+        await expect(pendingOperation).rejects.toThrow("Provider test-provider is not running");
+      });
+
+      it("should clear internal state", async () => {
+        // Setup initial state
+        await provider.start();
+        provider["cache"].set("test", { data: "test", timestamp: Date.now() });
+        provider["lastRequest"] = Date.now();
+        
+        // Stop provider
+        await provider.stop();
+        
+        // Verify state is cleared
+        expect(provider["cache"].size).toBe(0);
+        expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
+      });
+
+      it("should emit shutdown events", async () => {
+        await provider.start();
+        
+        // Stop provider and verify logging
+        await provider.stop();
+        
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          "Stopping provider",
+          expect.objectContaining({ provider: "test-provider" })
+        );
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          "Provider stopped",
+          expect.objectContaining({ provider: "test-provider" })
+        );
+      });
     });
   });
 
