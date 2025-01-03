@@ -32,9 +32,11 @@ export class ServiceError extends Error {
 export interface ProviderConfig {
   name: string;
   version: string;
-  cacheTimeout?: number;
-  retryAttempts?: number;
   rateLimitMs?: number;
+  maxRequestsPerWindow?: number;
+  burstLimit?: number;
+  retryAttempts?: number;
+  cacheTimeout?: number;
 }
 
 export interface CachedData<T> {
@@ -42,12 +44,45 @@ export interface CachedData<T> {
   timestamp: number;
 }
 
+interface RateLimitConfig {
+  windowMs: number;
+  maxRequests: number;
+  burstLimit: number;
+  priority: number;
+}
+
+interface RateLimitState {
+  windowStart: number;
+  requestCount: number;
+  tokenBucket: number;
+  lastRefill: number;
+}
+
+interface QueuedOperation<T> {
+  operation: () => Promise<T>;
+  priority: number;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: any) => void;
+  queuedAt: number;
+}
+
 export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected status: ServiceStatus = ServiceStatus.PENDING;
-  protected readonly config: ProviderConfig;
-  protected readonly logger: ManagedLoggingService;
+  protected config: ProviderConfig;
+  protected logger: ManagedLoggingService;
   protected cache: Map<string, CachedData<any>>;
-  protected lastRequest: number = 0;
+  protected lastRequest: number;
+  protected operationQueue: QueuedOperation<any>[] = [];
+  protected isProcessingQueue: boolean = false;
+
+  private rateLimitStates: Map<string, RateLimitState> = new Map();
+  private queueMetrics = {
+    totalProcessed: 0,
+    totalErrors: 0,
+    avgProcessingTime: 0,
+    maxQueueLength: 0,
+    priorityStats: new Map<number, { count: number; avgWaitTime: number }>(),
+  };
 
   constructor(config: ProviderConfig, logger: ManagedLoggingService) {
     // Validate required config fields
@@ -67,13 +102,14 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
     }
 
     this.config = {
-      cacheTimeout: 30000, // 30 seconds
+      cacheTimeout: 30000,
       retryAttempts: 3,
       rateLimitMs: 100,
       ...config,
     };
     this.logger = logger;
     this.cache = new Map();
+    this.lastRequest = 0;
   }
 
   // Service Interface Implementation
@@ -160,12 +196,15 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   // Public interface methods
   async getPrice(tokenMint: string): Promise<PriceData> {
     this.validateRunning();
-    return this.withRateLimit(() => this.getPriceImpl(tokenMint));
+    return this.withRateLimit(() => this.getPriceImpl(tokenMint), "getPrice");
   }
 
   async getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth> {
     this.validateRunning();
-    return this.withRateLimit(() => this.getOrderBookImpl(tokenMint, limit));
+    return this.withRateLimit(
+      () => this.getOrderBookImpl(tokenMint, limit),
+      "getOrderBook",
+    );
   }
 
   async getOHLCV(
@@ -174,8 +213,9 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
     limit: number,
   ): Promise<OHLCVData> {
     this.validateRunning();
-    return this.withRateLimit(() =>
-      this.getOHLCVImpl(tokenMint, timeframe, limit),
+    return this.withRateLimit(
+      () => this.getOHLCVImpl(tokenMint, timeframe, limit),
+      "getOHLCV",
     );
   }
 
@@ -190,24 +230,207 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
     }
   }
 
-  protected async enforceRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequest;
-    const waitTime = Math.max(
-      0,
-      this.config.rateLimitMs! - timeSinceLastRequest,
-    );
-
-    if (waitTime > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-
-    this.lastRequest = Date.now(); // Update after waiting to ensure precise timing
+  protected getRateLimitConfig(_endpoint: string): RateLimitConfig {
+    return {
+      windowMs: this.config.rateLimitMs || 1000,
+      maxRequests: this.config.maxRequestsPerWindow || 10,
+      burstLimit: this.config.burstLimit || 5,
+      priority: 1,
+    };
   }
 
-  protected async withRateLimit<T>(operation: () => Promise<T>): Promise<T> {
-    await this.enforceRateLimit();
-    return operation();
+  protected getOperationPriority(endpoint: string): number {
+    switch (endpoint) {
+      case "getOrderBook":
+        return 3; // Highest priority
+      case "getOHLCV":
+        return 2;
+      case "getPrice":
+      default:
+        return 1;
+    }
+  }
+
+  protected async enforceRateLimit(endpoint: string): Promise<void> {
+    const config = this.getRateLimitConfig(endpoint);
+    let state = this.rateLimitStates.get(endpoint);
+
+    if (!state) {
+      state = {
+        windowStart: Date.now(),
+        requestCount: 0,
+        tokenBucket: config.burstLimit,
+        lastRefill: Date.now(),
+      };
+      this.rateLimitStates.set(endpoint, state);
+    }
+
+    const now = Date.now();
+    const windowElapsed = now - state.windowStart;
+    const timeSinceLastRequest = now - this.lastRequest;
+
+    // Calculate required delay
+    let requiredDelay = 0;
+
+    // Add minimum delay between requests if needed
+    if (timeSinceLastRequest < config.windowMs) {
+      requiredDelay = Math.max(
+        requiredDelay,
+        config.windowMs - timeSinceLastRequest,
+      );
+    }
+
+    // Add rate limit delay if needed
+    if (state.requestCount >= config.maxRequests) {
+      const windowRemainder = config.windowMs - windowElapsed;
+      requiredDelay = Math.max(
+        requiredDelay,
+        windowRemainder > 0 ? windowRemainder : config.windowMs,
+      );
+
+      // Reset state after window
+      state.windowStart = now + requiredDelay;
+      state.requestCount = 0;
+      state.tokenBucket = config.burstLimit;
+    }
+
+    // Apply delay if needed
+    if (requiredDelay > 0) {
+      this.logger.debug("Rate limiting request", {
+        endpoint,
+        delay: requiredDelay,
+        requestCount: state.requestCount,
+        windowElapsed,
+      });
+      await new Promise((resolve) => setTimeout(resolve, requiredDelay));
+    }
+
+    // Update state
+    state.requestCount++;
+    this.lastRequest = Date.now();
+  }
+
+  protected async withRateLimit<T>(
+    operation: () => Promise<T>,
+    endpoint: string,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const priority = this.getOperationPriority(endpoint);
+      const queuedOperation: QueuedOperation<T> = {
+        operation: async () => {
+          await this.enforceRateLimit(endpoint);
+          return operation();
+        },
+        priority,
+        resolve,
+        reject,
+        queuedAt: Date.now(),
+      };
+
+      // Find insertion point maintaining priority order
+      const insertIndex = this.operationQueue.findIndex(
+        (op) =>
+          op.priority < priority ||
+          (op.priority === priority && op.queuedAt > queuedOperation.queuedAt),
+      );
+
+      // Insert operation at correct position
+      if (insertIndex === -1) {
+        this.operationQueue.push(queuedOperation);
+      } else {
+        this.operationQueue.splice(insertIndex, 0, queuedOperation);
+      }
+
+      // Log queue state for debugging
+      this.logger.debug("Queue state after insert", {
+        queueLength: this.operationQueue.length,
+        insertedPriority: priority,
+        queuePriorities: this.operationQueue.map((op) => op.priority),
+        endpoint,
+      });
+
+      // Start processing if not already running
+      if (!this.isProcessingQueue) {
+        setImmediate(() => this.processQueue());
+      }
+    });
+  }
+
+  private updateQueueMetrics(
+    operation: QueuedOperation<any>,
+    processingTime: number,
+  ) {
+    // Update general metrics
+    this.queueMetrics.totalProcessed++;
+    this.queueMetrics.maxQueueLength = Math.max(
+      this.queueMetrics.maxQueueLength,
+      this.operationQueue.length,
+    );
+
+    // Update priority stats
+    const stats = this.queueMetrics.priorityStats.get(operation.priority) || {
+      count: 0,
+      avgWaitTime: 0,
+    };
+    const waitTime = Date.now() - operation.queuedAt;
+    stats.count++;
+    stats.avgWaitTime =
+      (stats.avgWaitTime * (stats.count - 1) + waitTime) / stats.count;
+    this.queueMetrics.priorityStats.set(operation.priority, stats);
+
+    // Update average processing time
+    this.queueMetrics.avgProcessingTime =
+      (this.queueMetrics.avgProcessingTime *
+        (this.queueMetrics.totalProcessed - 1) +
+        processingTime) /
+      this.queueMetrics.totalProcessed;
+
+    // Log metrics periodically
+    if (this.queueMetrics.totalProcessed % 100 === 0) {
+      this.logger.info("Queue metrics", {
+        metrics: this.getQueueMetrics(),
+        provider: this.getName(),
+      });
+    }
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.operationQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    try {
+      // Process highest priority operation
+      const operation = this.operationQueue[0];
+      const startTime = Date.now();
+
+      try {
+        const result = await operation.operation();
+        operation.resolve(result);
+        this.updateQueueMetrics(operation, Date.now() - startTime);
+      } catch (error) {
+        operation.reject(error);
+        this.queueMetrics.totalErrors++;
+        this.logger.error("Operation failed", {
+          error,
+          priority: operation.priority,
+          queuedAt: operation.queuedAt,
+          processingTime: Date.now() - startTime,
+        });
+      } finally {
+        // Remove processed operation
+        this.operationQueue.shift();
+      }
+    } finally {
+      this.isProcessingQueue = false;
+
+      // Continue processing if there are more operations
+      if (this.operationQueue.length > 0) {
+        setImmediate(() => this.processQueue());
+      }
+    }
   }
 
   // Cache management methods
@@ -255,5 +478,9 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
       this.logger.error(`Failed to ${description.toLowerCase()}`, { error });
       throw error;
     }
+  }
+
+  protected getQueueMetrics() {
+    return { ...this.queueMetrics };
   }
 }

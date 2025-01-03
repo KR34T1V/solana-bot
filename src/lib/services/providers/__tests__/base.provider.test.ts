@@ -13,6 +13,7 @@ import type {
   OHLCVData,
   MarketDepth,
   ProviderCapabilities,
+  RateLimitConfig,
 } from "../../../types/provider";
 import { ManagedProviderBase, type ProviderConfig } from "../base.provider";
 import { ServiceStatus } from "../../core/service.manager";
@@ -22,57 +23,105 @@ class TestProvider extends ManagedProviderBase {
     super(config, logger);
   }
 
-  protected override async initializeProvider(): Promise<void> {
-    // Test implementation
+  protected async initializeProvider(): Promise<void> {
+    // No-op for testing
   }
 
-  protected override async cleanupProvider(): Promise<void> {
-    // Test implementation
+  protected async cleanupProvider(): Promise<void> {
+    // No-op for testing
   }
 
-  protected override async getPriceImpl(
+  protected async getPriceImpl(_tokenMint: string): Promise<PriceData> {
+    /**
+     * @function getPrice
+     * @description Helper function to simulate price data retrieval
+     * @returns {Promise<PriceData>} Simulated price data
+     */
+    async function getPrice() {
+      return {
+        price: 1.0,
+        timestamp: Date.now(),
+        confidence: 1,
+      };
+    }
+    return getPrice();
+  }
+
+  protected async getOrderBookImpl(
     _tokenMint: string,
-  ): Promise<PriceData> {
-    return {
-      price: 1.0,
-      timestamp: Date.now(),
-      confidence: 1,
-    };
-  }
-
-  protected override async getOrderBookImpl(
-    _tokenMint: string,
-    _limit: number,
+    _limit?: number,
   ): Promise<MarketDepth> {
-    return {
-      bids: [[1.0, 1.0]],
-      asks: [[1.1, 1.0]],
-      timestamp: Date.now(),
-    };
+    /**
+     * @function getOrderBook
+     * @description Helper function to simulate order book data retrieval
+     * @returns {Promise<MarketDepth>} Simulated order book data
+     */
+    async function getOrderBook() {
+      return {
+        bids: [[1.0, 1.0] as [number, number]],
+        asks: [[1.1, 1.0] as [number, number]],
+        timestamp: Date.now(),
+      };
+    }
+    return getOrderBook();
   }
 
-  protected override async getOHLCVImpl(
+  protected async getOHLCVImpl(
     _tokenMint: string,
     _timeframe: number,
     _limit: number,
   ): Promise<OHLCVData> {
-    const now = Date.now();
-    return {
-      open: 1.0,
-      high: 1.1,
-      low: 0.9,
-      close: 1.0,
-      volume: 1000,
-      timestamp: now,
-    };
+    /**
+     * @function getOHLCV
+     * @description Helper function to simulate OHLCV data retrieval
+     * @returns {Promise<OHLCVData>} Simulated OHLCV data
+     */
+    async function getOHLCV() {
+      return {
+        open: 1.0,
+        high: 1.1,
+        low: 0.9,
+        close: 1.0,
+        volume: 1000,
+        timestamp: Date.now(),
+      };
+    }
+    return getOHLCV();
   }
 
-  public override getCapabilities(): ProviderCapabilities {
+  getCapabilities(): ProviderCapabilities {
     return {
       canGetPrice: true,
       canGetOHLCV: true,
       canGetOrderBook: true,
     };
+  }
+
+  // Override rate limit config for testing
+  protected override getRateLimitConfig(endpoint: string): RateLimitConfig {
+    const baseConfig = super.getRateLimitConfig(endpoint);
+    const config = {
+      ...baseConfig,
+      // Use config values if provided, otherwise use test defaults
+      windowMs: this.config.rateLimitMs || 50,
+      maxRequests: this.config.maxRequestsPerWindow || 2,
+      burstLimit: this.config.burstLimit || 1,
+    };
+
+    // Set priority based on endpoint
+    switch (endpoint) {
+      case "getOrderBook":
+        config.priority = 3; // Highest priority
+        break;
+      case "getOHLCV":
+        config.priority = 2;
+        break;
+      case "getPrice":
+      default:
+        config.priority = 1;
+    }
+
+    return config;
   }
 }
 
@@ -204,11 +253,11 @@ describe("Base Provider", () => {
         // Setup mock cleanup
         const cleanupSpy = vi.spyOn(provider as any, "cleanupProvider");
         const cacheSpy = vi.spyOn(provider["cache"], "clear");
-        
+
         // Start and stop provider
         await provider.start();
         await provider.stop();
-        
+
         // Verify cleanup
         expect(cleanupSpy).toHaveBeenCalledTimes(1);
         expect(cacheSpy).toHaveBeenCalledTimes(1);
@@ -218,12 +267,14 @@ describe("Base Provider", () => {
       it("should cancel pending operations", async () => {
         // Setup a pending operation
         const pendingOperation = provider.getPrice("test-token");
-        
+
         // Stop provider before operation completes
         await provider.stop();
-        
+
         // Verify operation is rejected
-        await expect(pendingOperation).rejects.toThrow("Provider test-provider is not running");
+        await expect(pendingOperation).rejects.toThrow(
+          "Provider test-provider is not running",
+        );
       });
 
       it("should clear internal state", async () => {
@@ -231,10 +282,10 @@ describe("Base Provider", () => {
         await provider.start();
         provider["cache"].set("test", { data: "test", timestamp: Date.now() });
         provider["lastRequest"] = Date.now();
-        
+
         // Stop provider
         await provider.stop();
-        
+
         // Verify state is cleared
         expect(provider["cache"].size).toBe(0);
         expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
@@ -242,17 +293,17 @@ describe("Base Provider", () => {
 
       it("should emit shutdown events", async () => {
         await provider.start();
-        
+
         // Stop provider and verify logging
         await provider.stop();
-        
+
         expect(mockLogger.info).toHaveBeenCalledWith(
           "Stopping provider",
-          expect.objectContaining({ provider: "test-provider" })
+          expect.objectContaining({ provider: "test-provider" }),
         );
         expect(mockLogger.info).toHaveBeenCalledWith(
           "Provider stopped",
-          expect.objectContaining({ provider: "test-provider" })
+          expect.objectContaining({ provider: "test-provider" }),
         );
       });
     });
@@ -294,10 +345,118 @@ describe("Base Provider", () => {
     });
 
     describe("Rate Limiting", () => {
-      it.todo("should enforce rate limits");
-      it.todo("should handle concurrent requests");
-      it.todo("should queue excess requests");
-      it.todo("should respect priority levels");
+      it("should enforce rate limits", async () => {
+        const provider = new TestProvider(
+          {
+            name: "test",
+            version: "1.0.0",
+            rateLimitMs: 200,
+            maxRequestsPerWindow: 2,
+            burstLimit: 1,
+          },
+          mockLogger,
+        );
+
+        await provider.start();
+        const start = Date.now();
+
+        // First two requests should be immediate
+        await provider.getPrice("test-token");
+        await provider.getPrice("test-token");
+
+        // Third request should be delayed
+        await provider.getPrice("test-token");
+
+        const duration = Date.now() - start;
+        expect(duration).toBeGreaterThanOrEqual(200);
+      });
+
+      it("should handle concurrent requests", async () => {
+        const provider = new TestProvider(
+          {
+            name: "test",
+            version: "1.0.0",
+            rateLimitMs: 300,
+            maxRequestsPerWindow: 1,
+            burstLimit: 0,
+          },
+          mockLogger,
+        );
+
+        await provider.start();
+        const start = Date.now();
+
+        // Launch concurrent requests
+        await Promise.all([
+          provider.getPrice("token1"),
+          provider.getPrice("token2"),
+          provider.getPrice("token3"),
+        ]);
+
+        const duration = Date.now() - start;
+        expect(duration).toBeGreaterThanOrEqual(600);
+      });
+
+      it("should queue excess requests", async () => {
+        const provider = new TestProvider(
+          {
+            name: "test",
+            version: "1.0.0",
+            rateLimitMs: 100,
+            maxRequestsPerWindow: 1,
+            burstLimit: 0,
+          },
+          mockLogger,
+        );
+
+        await provider.start();
+
+        const results: number[] = [];
+        const start = Date.now();
+
+        // Launch requests that will be queued
+        await Promise.all([
+          provider.getPrice("token1").then(() => results.push(1)),
+          provider.getPrice("token2").then(() => results.push(2)),
+          provider.getPrice("token3").then(() => results.push(3)),
+        ]);
+
+        // Verify execution order
+        expect(results).toEqual([1, 2, 3]);
+
+        const duration = Date.now() - start;
+        expect(duration).toBeGreaterThanOrEqual(200); // At least 2 delays
+      });
+
+      it("should respect priority levels", async () => {
+        const provider = new TestProvider(
+          {
+            name: "test",
+            version: "1.0.0",
+            rateLimitMs: 100,
+            maxRequestsPerWindow: 1,
+            burstLimit: 0,
+          },
+          mockLogger,
+        );
+
+        await provider.start();
+        const results: string[] = [];
+
+        // Launch all requests concurrently
+        await Promise.all([
+          provider.getPrice("low-priority").then(() => results.push("low")),
+          provider
+            .getOrderBook("high-priority")
+            .then(() => results.push("high")),
+          provider
+            .getOHLCV("medium-priority", 1, 1)
+            .then(() => results.push("medium")),
+        ]);
+
+        // High priority should be first
+        expect(results[0]).toBe("high");
+      }, 10000); // Increase timeout
     });
 
     describe("Validation", () => {
