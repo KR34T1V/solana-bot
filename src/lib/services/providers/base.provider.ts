@@ -196,15 +196,66 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
   // Public interface methods
   async getPrice(tokenMint: string): Promise<PriceData> {
     this.validateRunning();
-    return this.withRateLimit(() => this.getPriceImpl(tokenMint), "getPrice");
+    this.validateTokenMint(tokenMint);
+    const result = await this.withRateLimit(
+      () => this.getPriceImpl(tokenMint),
+      "getPrice",
+    );
+
+    // Validate response
+    this.validateResponseData(
+      result,
+      {
+        price: (v) => typeof v === "number" && v > 0,
+        timestamp: (v) => typeof v === "number" && v > 0 && v <= Date.now(),
+        confidence: (v) => typeof v === "number" && v >= 0 && v <= 1,
+      },
+      "price",
+    );
+
+    return result;
   }
 
   async getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth> {
     this.validateRunning();
-    return this.withRateLimit(
+    this.validateTokenMint(tokenMint);
+    if (limit !== undefined) {
+      this.validateLimit(limit, 500); // Lower limit for order book
+    }
+
+    const result = await this.withRateLimit(
       () => this.getOrderBookImpl(tokenMint, limit),
       "getOrderBook",
     );
+
+    // Validate response
+    this.validateResponseData(
+      result,
+      {
+        bids: (v) =>
+          Array.isArray(v) &&
+          v.every(
+            (bid) =>
+              Array.isArray(bid) &&
+              bid.length === 2 &&
+              typeof bid[0] === "number" &&
+              typeof bid[1] === "number",
+          ),
+        asks: (v) =>
+          Array.isArray(v) &&
+          v.every(
+            (ask) =>
+              Array.isArray(ask) &&
+              ask.length === 2 &&
+              typeof ask[0] === "number" &&
+              typeof ask[1] === "number",
+          ),
+        timestamp: (v) => typeof v === "number" && v > 0 && v <= Date.now(),
+      },
+      "orderBook",
+    );
+
+    return result;
   }
 
   async getOHLCV(
@@ -213,10 +264,40 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
     limit: number,
   ): Promise<OHLCVData> {
     this.validateRunning();
-    return this.withRateLimit(
+    this.validateTokenMint(tokenMint);
+    this.validateTimeframe(timeframe);
+    this.validateLimit(limit);
+
+    const result = await this.withRateLimit(
       () => this.getOHLCVImpl(tokenMint, timeframe, limit),
       "getOHLCV",
     );
+
+    // Validate response
+    this.validateResponseData(
+      result,
+      {
+        open: (v) => typeof v === "number" && v > 0,
+        high: (v) => typeof v === "number" && v > 0,
+        low: (v) => typeof v === "number" && v > 0,
+        close: (v) => typeof v === "number" && v > 0,
+        volume: (v) => typeof v === "number" && v >= 0,
+        timestamp: (v) => typeof v === "number" && v > 0 && v <= Date.now(),
+      },
+      "ohlcv",
+    );
+
+    // Additional OHLCV-specific validations
+    if (result.high < result.low) {
+      throw new ServiceError(
+        "Invalid OHLCV data: high cannot be less than low",
+        "VALIDATION_ERROR",
+        false,
+        { high: result.high, low: result.low },
+      );
+    }
+
+    return result;
   }
 
   // Protected utility methods
@@ -482,5 +563,169 @@ export abstract class ManagedProviderBase implements Service, BaseProvider {
 
   protected getQueueMetrics() {
     return { ...this.queueMetrics };
+  }
+
+  // Validation methods
+  protected validateTokenMint(tokenMint: string): void {
+    if (!tokenMint) {
+      const error = new ServiceError(
+        "Token mint address cannot be empty",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "tokenMint", value: tokenMint },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+
+    // Check for valid base58 format
+    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
+    if (!base58Regex.test(tokenMint)) {
+      const error = new ServiceError(
+        "Invalid token mint address format",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "tokenMint", value: tokenMint },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+
+    // Check length (32 bytes in base58)
+    if (tokenMint.length < 32 || tokenMint.length > 44) {
+      const error = new ServiceError(
+        "Invalid token mint address length",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "tokenMint", value: tokenMint, length: tokenMint.length },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+  }
+
+  protected validateTimeframe(timeframe: number): void {
+    if (typeof timeframe !== "number" || !Number.isFinite(timeframe)) {
+      const error = new ServiceError(
+        "Timeframe must be a number",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "timeframe", value: timeframe },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+
+    if (timeframe <= 0) {
+      const error = new ServiceError(
+        "Timeframe must be positive",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "timeframe", value: timeframe },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+
+    // Valid timeframes (in seconds): 60, 300, 900, 3600, 14400, 86400
+    const validTimeframes = [60, 300, 900, 3600, 14400, 86400];
+    if (!validTimeframes.includes(timeframe)) {
+      const error = new ServiceError(
+        "Invalid timeframe value",
+        "VALIDATION_ERROR",
+        false,
+        {
+          parameter: "timeframe",
+          value: timeframe,
+          validValues: validTimeframes,
+        },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+  }
+
+  protected validateLimit(limit: number, maxLimit: number = 1000): void {
+    if (typeof limit !== "number" || !Number.isFinite(limit)) {
+      const error = new ServiceError(
+        "Limit must be a number",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "limit", value: limit },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+
+    if (limit <= 0) {
+      const error = new ServiceError(
+        "Limit must be positive",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "limit", value: limit },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+
+    if (limit > maxLimit) {
+      const error = new ServiceError(
+        "Limit exceeds maximum allowed",
+        "VALIDATION_ERROR",
+        false,
+        { parameter: "limit", value: limit, maxLimit },
+      );
+      this.logger.error("Validation error", {
+        error,
+        provider: this.getName(),
+      });
+      throw error;
+    }
+  }
+
+  protected validateResponseData<T extends object>(
+    data: T,
+    schema: Record<string, (value: any) => boolean>,
+    context: string,
+  ): void {
+    for (const [key, validator] of Object.entries(schema)) {
+      if (!(key in data) || !validator((data as any)[key])) {
+        const error = new ServiceError(
+          `Invalid response data: ${key}`,
+          "VALIDATION_ERROR",
+          false,
+          { parameter: key, context, data },
+        );
+        this.logger.error("Validation error", {
+          error,
+          provider: this.getName(),
+        });
+        throw error;
+      }
+    }
   }
 }

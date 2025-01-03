@@ -6,7 +6,7 @@
  * @lastModified 2025-01-02
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { ManagedLoggingService } from "../../core/managed-logging";
 import type {
   PriceData,
@@ -15,7 +15,11 @@ import type {
   ProviderCapabilities,
   RateLimitConfig,
 } from "../../../types/provider";
-import { ManagedProviderBase, type ProviderConfig } from "../base.provider";
+import {
+  ManagedProviderBase,
+  type ProviderConfig,
+  ServiceError,
+} from "../base.provider";
 import { ServiceStatus } from "../../core/service.manager";
 
 class TestProvider extends ManagedProviderBase {
@@ -226,6 +230,7 @@ describe("Base Provider", () => {
       });
 
       it("should configure rate limiting", async () => {
+        const validToken = "11111111111111111111111111111111111111111111";
         // Test custom rate limit
         const customProvider = new TestProvider(
           {
@@ -240,8 +245,8 @@ describe("Base Provider", () => {
         await customProvider.start();
 
         // Make two requests that should be rate limited
-        await customProvider.getPrice("test-token");
-        await customProvider.getPrice("test-token");
+        await customProvider.getPrice(validToken);
+        await customProvider.getPrice(validToken);
 
         const duration = Date.now() - start;
         expect(duration).toBeGreaterThanOrEqual(200);
@@ -265,8 +270,9 @@ describe("Base Provider", () => {
       });
 
       it("should cancel pending operations", async () => {
+        const validToken = "11111111111111111111111111111111111111111111";
         // Setup a pending operation
-        const pendingOperation = provider.getPrice("test-token");
+        const pendingOperation = provider.getPrice(validToken);
 
         // Stop provider before operation completes
         await provider.stop();
@@ -310,12 +316,28 @@ describe("Base Provider", () => {
   });
 
   describe("Provider Operations", () => {
+    const validToken = "11111111111111111111111111111111111111111111";
+    let testProvider: TestProvider;
+
     beforeEach(async () => {
-      await provider.start();
+      testProvider = new TestProvider(
+        {
+          name: "test",
+          version: "1.0.0",
+        },
+        mockLogger,
+      );
+      await testProvider.start();
+    });
+
+    afterEach(async () => {
+      if (testProvider.getStatus() !== ServiceStatus.STOPPED) {
+        await testProvider.stop();
+      }
     });
 
     it("should get price", async () => {
-      const price = await provider.getPrice("test-token");
+      const price = await testProvider.getPrice(validToken);
       expect(price).toEqual({
         price: 1.0,
         timestamp: expect.any(Number),
@@ -324,7 +346,7 @@ describe("Base Provider", () => {
     });
 
     it("should get order book", async () => {
-      const orderBook = await provider.getOrderBook("test-token");
+      const orderBook = await testProvider.getOrderBook(validToken);
       expect(orderBook).toEqual({
         bids: [[1.0, 1.0]],
         asks: [[1.1, 1.0]],
@@ -333,7 +355,7 @@ describe("Base Provider", () => {
     });
 
     it("should get OHLCV data", async () => {
-      const ohlcv = await provider.getOHLCV("test-token", 3600, 100);
+      const ohlcv = await testProvider.getOHLCV(validToken, 3600, 100);
       expect(ohlcv).toEqual({
         open: 1.0,
         high: 1.1,
@@ -361,14 +383,15 @@ describe("Base Provider", () => {
         const start = Date.now();
 
         // First two requests should be immediate
-        await provider.getPrice("test-token");
-        await provider.getPrice("test-token");
+        await provider.getPrice(validToken);
+        await provider.getPrice(validToken);
 
         // Third request should be delayed
-        await provider.getPrice("test-token");
+        await provider.getPrice(validToken);
 
         const duration = Date.now() - start;
         expect(duration).toBeGreaterThanOrEqual(200);
+        await provider.stop();
       });
 
       it("should handle concurrent requests", async () => {
@@ -388,13 +411,14 @@ describe("Base Provider", () => {
 
         // Launch concurrent requests
         await Promise.all([
-          provider.getPrice("token1"),
-          provider.getPrice("token2"),
-          provider.getPrice("token3"),
+          provider.getPrice(validToken),
+          provider.getPrice(validToken),
+          provider.getPrice(validToken),
         ]);
 
         const duration = Date.now() - start;
         expect(duration).toBeGreaterThanOrEqual(600);
+        await provider.stop();
       });
 
       it("should queue excess requests", async () => {
@@ -416,9 +440,9 @@ describe("Base Provider", () => {
 
         // Launch requests that will be queued
         await Promise.all([
-          provider.getPrice("token1").then(() => results.push(1)),
-          provider.getPrice("token2").then(() => results.push(2)),
-          provider.getPrice("token3").then(() => results.push(3)),
+          provider.getPrice(validToken).then(() => results.push(1)),
+          provider.getPrice(validToken).then(() => results.push(2)),
+          provider.getPrice(validToken).then(() => results.push(3)),
         ]);
 
         // Verify execution order
@@ -426,6 +450,7 @@ describe("Base Provider", () => {
 
         const duration = Date.now() - start;
         expect(duration).toBeGreaterThanOrEqual(200); // At least 2 delays
+        await provider.stop();
       });
 
       it("should respect priority levels", async () => {
@@ -445,25 +470,225 @@ describe("Base Provider", () => {
 
         // Launch all requests concurrently
         await Promise.all([
-          provider.getPrice("low-priority").then(() => results.push("low")),
+          provider.getPrice(validToken).then(() => results.push("low")),
+          provider.getOrderBook(validToken).then(() => results.push("high")),
           provider
-            .getOrderBook("high-priority")
-            .then(() => results.push("high")),
-          provider
-            .getOHLCV("medium-priority", 1, 1)
+            .getOHLCV(validToken, 3600, 1)
             .then(() => results.push("medium")),
         ]);
 
         // High priority should be first
         expect(results[0]).toBe("high");
+        await provider.stop();
       }, 10000); // Increase timeout
     });
 
     describe("Validation", () => {
-      it.todo("should validate input parameters");
-      it.todo("should handle invalid tokens");
-      it.todo("should validate response data");
-      it.todo("should handle validation failures");
+      let validationProvider: TestProvider;
+
+      beforeEach(async () => {
+        validationProvider = new TestProvider(
+          {
+            name: "test",
+            version: "1.0.0",
+          },
+          mockLogger,
+        );
+        await validationProvider.start();
+      });
+
+      afterEach(async () => {
+        if (validationProvider.getStatus() !== ServiceStatus.STOPPED) {
+          await validationProvider.stop();
+        }
+      });
+
+      describe("Input Parameters", () => {
+        it("should validate token mint address format", async () => {
+          // Valid token
+          await expect(
+            validationProvider.getPrice(validToken),
+          ).resolves.toBeDefined();
+
+          // Invalid base58 characters
+          await expect(
+            validationProvider.getPrice("not@valid#address"),
+          ).rejects.toThrow("Invalid token mint address format");
+
+          // Empty address
+          await expect(validationProvider.getPrice("")).rejects.toThrow(
+            "Token mint address cannot be empty",
+          );
+
+          // Too short
+          await expect(validationProvider.getPrice("abc")).rejects.toThrow(
+            "Invalid token mint address length",
+          );
+        });
+
+        it("should validate timeframe values", async () => {
+          // Valid timeframe
+          await expect(
+            validationProvider.getOHLCV(validToken, 3600, 10),
+          ).resolves.toBeDefined();
+
+          // Negative timeframe
+          await expect(
+            validationProvider.getOHLCV(validToken, -1, 10),
+          ).rejects.toThrow("Timeframe must be positive");
+
+          // Zero timeframe
+          await expect(
+            validationProvider.getOHLCV(validToken, 0, 10),
+          ).rejects.toThrow("Timeframe must be positive");
+
+          // Invalid timeframe unit
+          await expect(
+            validationProvider.getOHLCV(validToken, 123, 10),
+          ).rejects.toThrow("Invalid timeframe value");
+        });
+
+        it("should validate limit parameters", async () => {
+          // Valid limit
+          await expect(
+            validationProvider.getOHLCV(validToken, 3600, 10),
+          ).resolves.toBeDefined();
+
+          // Negative limit
+          await expect(
+            validationProvider.getOHLCV(validToken, 3600, -1),
+          ).rejects.toThrow("Limit must be positive");
+
+          // Zero limit
+          await expect(
+            validationProvider.getOHLCV(validToken, 3600, 0),
+          ).rejects.toThrow("Limit must be positive");
+
+          // Excessive limit
+          await expect(
+            validationProvider.getOHLCV(validToken, 3600, 10001),
+          ).rejects.toThrow("Limit exceeds maximum allowed");
+
+          // Order book limit
+          await expect(
+            validationProvider.getOrderBook(validToken, -1),
+          ).rejects.toThrow("Limit must be positive");
+        });
+      });
+
+      describe("Invalid Tokens", () => {
+        it("should handle non-existent tokens", async () => {
+          // Mock implementation always returns data
+          await expect(
+            validationProvider.getPrice(validToken),
+          ).resolves.toBeDefined();
+        });
+
+        it("should handle malformed addresses", async () => {
+          // Wrong length
+          await expect(validationProvider.getPrice("11111")).rejects.toThrow(
+            "Invalid token mint address length",
+          );
+
+          // Invalid base58 format
+          await expect(
+            validationProvider.getPrice("1111111111111111111111111111111!"),
+          ).rejects.toThrow("Invalid token mint address format");
+        });
+
+        it("should handle null/undefined values", async () => {
+          await expect(
+            validationProvider.getPrice(null as any),
+          ).rejects.toThrow("Token mint address cannot be empty");
+          await expect(
+            validationProvider.getPrice(undefined as any),
+          ).rejects.toThrow("Token mint address cannot be empty");
+        });
+      });
+
+      describe("Response Data", () => {
+        it("should validate price data structure", async () => {
+          const price = await validationProvider.getPrice(validToken);
+          expect(price).toEqual({
+            price: expect.any(Number),
+            timestamp: expect.any(Number),
+            confidence: expect.any(Number),
+          });
+          expect(price.price).toBeGreaterThan(0);
+          expect(price.confidence).toBeGreaterThanOrEqual(0);
+          expect(price.confidence).toBeLessThanOrEqual(1);
+        });
+
+        it("should validate OHLCV data structure", async () => {
+          const ohlcv = await validationProvider.getOHLCV(validToken, 3600, 10);
+          expect(ohlcv).toEqual({
+            open: expect.any(Number),
+            high: expect.any(Number),
+            low: expect.any(Number),
+            close: expect.any(Number),
+            volume: expect.any(Number),
+            timestamp: expect.any(Number),
+          });
+          expect(ohlcv.high).toBeGreaterThanOrEqual(ohlcv.low);
+          expect(ohlcv.volume).toBeGreaterThanOrEqual(0);
+        });
+
+        it("should validate timestamp values", async () => {
+          const price = await validationProvider.getPrice(validToken);
+          const now = Date.now();
+          expect(price.timestamp).toBeLessThanOrEqual(now);
+          expect(price.timestamp).toBeGreaterThan(now - 60000); // Within last minute
+        });
+      });
+
+      describe("Error Handling", () => {
+        it("should handle validation errors appropriately", async () => {
+          try {
+            await validationProvider.getPrice("invalid-token");
+            expect.fail("Should have thrown an error");
+          } catch (error) {
+            expect(error).toBeInstanceOf(ServiceError);
+            expect((error as ServiceError).code).toBe("VALIDATION_ERROR");
+            expect((error as ServiceError).isRetryable).toBe(false);
+          }
+        });
+
+        it("should include detailed error context", async () => {
+          try {
+            await validationProvider.getOHLCV(validToken, -1, 10);
+            expect.fail("Should have thrown an error");
+          } catch (error) {
+            expect(error).toBeInstanceOf(ServiceError);
+            expect((error as ServiceError).code).toBe("VALIDATION_ERROR");
+            expect((error as ServiceError).details).toEqual(
+              expect.objectContaining({
+                parameter: "timeframe",
+                value: -1,
+              }),
+            );
+          }
+        });
+
+        it("should maintain error history", async () => {
+          // Make multiple invalid requests
+          await expect(
+            validationProvider.getPrice("invalid1"),
+          ).rejects.toThrow();
+          await expect(
+            validationProvider.getPrice("invalid2"),
+          ).rejects.toThrow();
+
+          // Check error logging
+          expect(mockLogger.error).toHaveBeenCalledTimes(2);
+          expect(mockLogger.error).toHaveBeenCalledWith(
+            "Validation error",
+            expect.objectContaining({
+              provider: "test",
+              error: expect.any(Error),
+            }),
+          );
+        });
+      });
     });
   });
 
