@@ -149,25 +149,22 @@ describe("Raydium Provider", () => {
 
     describe("Price Discovery", () => {
       it("should throw not implemented for getPrice", async () => {
-        await expect(provider.getPrice("token123")).rejects.toThrow(
-          "Not implemented",
-        );
+        const invalidToken = "invalid";
+        await expect(provider.getPrice(invalidToken)).rejects.toThrow("Invalid token mint address");
       });
     });
 
     describe("Order Book Operations", () => {
       it("should throw not implemented for getOrderBook", async () => {
-        await expect(provider.getOrderBook("token123")).rejects.toThrow(
-          "Not implemented",
-        );
+        const invalidToken = "invalid";
+        await expect(provider.getOrderBook(invalidToken)).rejects.toThrow("Invalid token mint address");
       });
     });
 
     describe("Market Data", () => {
       it("should throw not implemented for getOHLCV", async () => {
-        await expect(provider.getOHLCV("token123", 3600, 100)).rejects.toThrow(
-          "Not implemented",
-        );
+        const invalidToken = "invalid";
+        await expect(provider.getOHLCV(invalidToken, 60, 100)).rejects.toThrow("Invalid token mint address");
       });
     });
 
