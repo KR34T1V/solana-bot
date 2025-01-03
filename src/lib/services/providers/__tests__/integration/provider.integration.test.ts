@@ -71,14 +71,24 @@ describe("Provider Integration", () => {
     expect(metaplexProvider).toBeDefined();
   });
 
-  describe("Provider Coordination", () => {
-    describe("Service Lifecycle", () => {
-      it.todo("should start all providers in correct order");
-      it.todo("should handle provider startup failures gracefully");
-      it.todo("should maintain service state consistency");
-      it.todo("should coordinate provider shutdown sequence");
+  // Core Integration Tests
+  describe("Service Lifecycle", () => {
+    describe("Initialization", () => {
+      it.todo("should initialize providers in dependency order");
+      it.todo("should validate cross-provider configuration");
+      it.todo("should setup shared resources");
+      it.todo("should configure global rate limiting");
     });
 
+    describe("Cleanup", () => {
+      it.todo("should cleanup shared resources");
+      it.todo("should handle graceful shutdown");
+      it.todo("should maintain shutdown order");
+      it.todo("should verify resource release");
+    });
+  });
+
+  describe("Provider Coordination", () => {
     describe("Resource Sharing", () => {
       it.todo("should share RPC connections efficiently");
       it.todo("should coordinate websocket subscriptions");
@@ -86,7 +96,7 @@ describe("Provider Integration", () => {
       it.todo("should handle connection limits");
     });
 
-    describe("State Management", () => {
+    describe("State Synchronization", () => {
       it.todo("should synchronize provider states");
       it.todo("should handle state conflicts");
       it.todo("should maintain data consistency");
@@ -94,141 +104,109 @@ describe("Provider Integration", () => {
     });
   });
 
-  describe("Multi-DEX Operations", () => {
+  // Cross-Provider Operations
+  describe("Trading Operations", () => {
     describe("Price Discovery", () => {
-      it.todo("should aggregate prices across DEXs");
+      it.todo("should aggregate prices across providers");
       it.todo("should handle price discrepancies");
-      it.todo("should detect arbitrage opportunities");
       it.todo("should validate price reliability");
+      it.todo("should track price convergence");
     });
 
-    describe("Liquidity Aggregation", () => {
-      it.todo("should combine liquidity from multiple sources");
-      it.todo("should optimize liquidity utilization");
-      it.todo("should track liquidity shifts");
-      it.todo("should handle fragmented liquidity");
+    describe("Liquidity Analysis", () => {
+      it.todo("should combine liquidity metrics");
+      it.todo("should track liquidity distribution");
+      it.todo("should analyze liquidity depth");
+      it.todo("should detect liquidity shifts");
     });
 
-    describe("Order Routing", () => {
-      it.todo("should find optimal execution paths");
-      it.todo("should split orders across DEXs");
-      it.todo("should handle partial fills");
-      it.todo("should manage execution priorities");
+    describe("Trade Execution", () => {
+      it.todo("should coordinate trade execution");
+      it.todo("should handle split orders");
+      it.todo("should manage execution priority");
+      it.todo("should track execution quality");
     });
   });
 
-  describe("Error Handling", () => {
+  describe("NFT Integration", () => {
+    describe("Metadata Integration", () => {
+      it.todo("should link NFT metadata with markets");
+      it.todo("should track collection metrics");
+      it.todo("should analyze trading patterns");
+      it.todo("should monitor creator activity");
+    });
+
+    describe("Market Analysis", () => {
+      it.todo("should correlate market data");
+      it.todo("should track collection performance");
+      it.todo("should analyze market impact");
+      it.todo("should detect market manipulation");
+    });
+  });
+
+  // Error Handling & Recovery
+  describe("Error Management", () => {
     describe("Provider Failures", () => {
-      it.todo("should handle single provider failure");
-      it.todo("should implement failover mechanisms");
-      it.todo("should maintain partial functionality");
-      it.todo("should attempt provider recovery");
+      it.todo("should handle provider outages");
+      it.todo("should implement failover logic");
+      it.todo("should maintain partial operation");
+      it.todo("should coordinate recovery");
     });
 
-    describe("Network Issues", () => {
-      it.todo("should handle RPC node failures");
-      it.todo("should manage connection timeouts");
-      it.todo("should implement retry strategies");
-      it.todo("should maintain operation continuity");
-    });
-
-    describe("Data Inconsistencies", () => {
+    describe("Data Consistency", () => {
       it.todo("should detect data anomalies");
-      it.todo("should resolve conflicting information");
+      it.todo("should resolve conflicts");
       it.todo("should validate cross-provider data");
       it.todo("should handle stale data");
     });
   });
 
-  describe("Performance Metrics", () => {
-    describe("Latency Tracking", () => {
-      it.todo("should measure cross-provider latency");
-      it.todo("should track operation durations");
-      it.todo("should monitor network delays");
-      it.todo("should identify performance bottlenecks");
+  describe("Resource Management", () => {
+    describe("Memory Management", () => {
+      it.todo("should coordinate cache usage");
+      it.todo("should handle cache invalidation");
+      it.todo("should manage memory pressure");
+      it.todo("should implement cleanup strategies");
     });
 
-    describe("Resource Utilization", () => {
-      it.todo("should monitor memory usage");
-      it.todo("should track CPU utilization");
-      it.todo("should measure network bandwidth");
-      it.todo("should analyze resource patterns");
+    describe("Connection Management", () => {
+      it.todo("should optimize connection sharing");
+      it.todo("should handle connection failures");
+      it.todo("should manage connection pools");
+      it.todo("should monitor connection health");
     });
+  });
 
-    describe("Throughput Analysis", () => {
+  // Observability & Monitoring
+  describe("System Observability", () => {
+    describe("Performance Monitoring", () => {
+      it.todo("should track cross-provider latency");
+      it.todo("should monitor resource usage");
       it.todo("should measure operation throughput");
-      it.todo("should track success rates");
-      it.todo("should analyze bottlenecks");
-      it.todo("should monitor system capacity");
+      it.todo("should analyze system bottlenecks");
+    });
+
+    describe("Health Monitoring", () => {
+      it.todo("should track system health metrics");
+      it.todo("should monitor provider status");
+      it.todo("should detect system degradation");
+      it.todo("should measure reliability metrics");
     });
   });
 
-  describe("Risk Management", () => {
-    describe("System Health", () => {
-      it.todo("should monitor overall system health");
-      it.todo("should track error rates");
-      it.todo("should measure system stability");
-      it.todo("should detect degraded performance");
-    });
-
-    describe("Circuit Breakers", () => {
-      it.todo("should implement system-wide circuit breakers");
-      it.todo("should coordinate provider pauses");
-      it.todo("should manage recovery procedures");
-      it.todo("should handle emergency shutdowns");
-    });
-
-    describe("Operational Risks", () => {
-      it.todo("should track operational metrics");
-      it.todo("should monitor system load");
-      it.todo("should analyze error patterns");
-      it.todo("should assess system reliability");
-    });
-  });
-
-  describe("Compliance & Monitoring", () => {
-    describe("Audit Logging", () => {
-      it.todo("should log cross-provider operations");
-      it.todo("should track system events");
-      it.todo("should maintain audit trails");
-      it.todo("should monitor suspicious activity");
-    });
-
-    describe("Rate Limiting", () => {
-      it.todo("should enforce rate limits");
-      it.todo("should coordinate request quotas");
-      it.todo("should handle quota exhaustion");
-      it.todo("should implement backoff strategies");
-    });
-
-    describe("System Monitoring", () => {
-      it.todo("should monitor system metrics");
-      it.todo("should track provider health");
-      it.todo("should analyze system trends");
-      it.todo("should generate system reports");
-    });
-  });
-
-  describe("Base Provider Integration", () => {
-    describe("Core Functionality", () => {
-      it.todo("should handle provider initialization correctly");
-      it.todo("should manage provider lifecycle events");
-      it.todo("should implement error recovery mechanisms");
-      it.todo("should maintain provider state");
-    });
-
-    describe("Event Handling", () => {
-      it.todo("should emit lifecycle events");
-      it.todo("should handle error events");
-      it.todo("should propagate state changes");
+  describe("Event Management", () => {
+    describe("Event Coordination", () => {
+      it.todo("should coordinate event propagation");
+      it.todo("should handle event ordering");
       it.todo("should manage event subscriptions");
+      it.todo("should track event delivery");
     });
 
-    describe("Configuration Management", () => {
-      it.todo("should load provider configuration");
-      it.todo("should validate configuration");
-      it.todo("should handle configuration updates");
-      it.todo("should maintain configuration state");
+    describe("Event Analysis", () => {
+      it.todo("should analyze event patterns");
+      it.todo("should detect event anomalies");
+      it.todo("should measure event latency");
+      it.todo("should monitor event volume");
     });
   });
 });

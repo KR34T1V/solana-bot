@@ -61,6 +61,7 @@ describe("Raydium Provider", () => {
     );
   });
 
+  // Base Provider Functionality
   describe("Service Lifecycle", () => {
     it("should start correctly", async () => {
       await provider.start();
@@ -72,8 +73,43 @@ describe("Raydium Provider", () => {
       await provider.stop();
       expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
     });
+
+    describe("Initialization", () => {
+      it.todo("should validate Raydium SDK configuration");
+      it.todo("should initialize pool cache");
+      it.todo("should setup pool subscriptions");
+      it.todo("should configure rate limiting");
+    });
+
+    describe("Cleanup", () => {
+      it.todo("should cleanup pool subscriptions");
+      it.todo("should cancel pending operations");
+      it.todo("should clear pool cache");
+      it.todo("should emit shutdown events");
+    });
   });
 
+  describe("Provider Operations", () => {
+    beforeEach(async () => {
+      await provider.start();
+    });
+
+    describe("Rate Limiting", () => {
+      it.todo("should enforce RPC rate limits");
+      it.todo("should handle concurrent pool requests");
+      it.todo("should queue excess computations");
+      it.todo("should respect priority levels");
+    });
+
+    describe("Validation", () => {
+      it.todo("should validate pool addresses");
+      it.todo("should verify token pairs");
+      it.todo("should validate swap parameters");
+      it.todo("should handle validation failures");
+    });
+  });
+
+  // Raydium-Specific Functionality
   describe("AMM Operations", () => {
     describe("Pool Discovery", () => {
       it.todo("should fetch all active pools");
@@ -111,13 +147,6 @@ describe("Raydium Provider", () => {
       it.todo("should handle price delays");
       it.todo("should detect feed anomalies");
     });
-
-    describe("Market Making", () => {
-      it.todo("should analyze MM activity");
-      it.todo("should detect toxic flow");
-      it.todo("should monitor spread dynamics");
-      it.todo("should track inventory risk");
-    });
   });
 
   describe("Liquidity Analysis", () => {
@@ -134,13 +163,6 @@ describe("Raydium Provider", () => {
       it.todo("should detect sandwich attacks");
       it.todo("should monitor MEV activity");
     });
-
-    describe("Risk Metrics", () => {
-      it.todo("should calculate pool volatility");
-      it.todo("should monitor pool correlation");
-      it.todo("should track systemic risks");
-      it.todo("should analyze pool dependencies");
-    });
   });
 
   describe("Trade Execution", () => {
@@ -151,64 +173,60 @@ describe("Raydium Provider", () => {
       it.todo("should implement smart routing");
     });
 
-    describe("Transaction Optimization", () => {
+    describe("Transaction Management", () => {
       it.todo("should batch instructions");
       it.todo("should optimize compute budget");
       it.todo("should handle priority fees");
       it.todo("should implement backoff strategy");
     });
-
-    describe("Settlement", () => {
-      it.todo("should verify swap outcomes");
-      it.todo("should handle partial fills");
-      it.todo("should track settlement latency");
-      it.todo("should manage transaction lifecycle");
-    });
   });
 
-  describe("Risk Management", () => {
-    describe("Pool Risks", () => {
-      it.todo("should detect pool manipulation");
-      it.todo("should monitor toxic flow");
-      it.todo("should track pool health");
-      it.todo("should analyze pool dependencies");
-    });
-
-    describe("Protocol Risks", () => {
-      it.todo("should monitor protocol upgrades");
-      it.todo("should track admin operations");
-      it.todo("should validate pool parameters");
-      it.todo("should analyze protocol risks");
-    });
-
-    describe("Market Risks", () => {
-      it.todo("should handle market stress");
-      it.todo("should implement circuit breakers");
-      it.todo("should monitor market conditions");
-      it.todo("should track correlation risks");
-    });
-  });
-
-  describe("Performance Optimization", () => {
-    describe("RPC Optimization", () => {
-      it.todo("should batch RPC requests");
-      it.todo("should implement request caching");
+  // Inherited from Base Provider
+  describe("Error Handling", () => {
+    describe("Operation Errors", () => {
+      it.todo("should handle pool errors");
+      it.todo("should handle computation timeouts");
       it.todo("should handle RPC failures");
-      it.todo("should optimize subscription load");
+      it.todo("should handle rate limit errors");
     });
 
-    describe("Data Management", () => {
-      it.todo("should cache pool data");
-      it.todo("should optimize memory usage");
-      it.todo("should handle data staleness");
-      it.todo("should implement pruning strategy");
+    describe("Recovery", () => {
+      it.todo("should retry failed operations");
+      it.todo("should handle partial updates");
+      it.todo("should maintain pool state");
+      it.todo("should log recovery attempts");
+    });
+  });
+
+  describe("Resource Management", () => {
+    describe("Memory", () => {
+      it.todo("should cache pool computations");
+      it.todo("should handle pool cache invalidation");
+      it.todo("should manage memory limits");
+      it.todo("should cleanup unused pools");
     });
 
-    describe("Resource Management", () => {
-      it.todo("should monitor resource usage");
-      it.todo("should handle backpressure");
-      it.todo("should implement rate limiting");
-      it.todo("should optimize compute usage");
+    describe("Connections", () => {
+      it.todo("should manage RPC connections");
+      it.todo("should handle connection failures");
+      it.todo("should implement connection pooling");
+      it.todo("should monitor RPC health");
+    });
+  });
+
+  describe("Observability", () => {
+    describe("Metrics", () => {
+      it.todo("should track pool computation time");
+      it.todo("should monitor pool health");
+      it.todo("should track execution success rate");
+      it.todo("should measure pool performance");
+    });
+
+    describe("Events", () => {
+      it.todo("should emit pool updates");
+      it.todo("should emit price changes");
+      it.todo("should emit pool health status");
+      it.todo("should handle event subscribers");
     });
   });
 });

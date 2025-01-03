@@ -113,6 +113,20 @@ describe("Base Provider", () => {
       await provider.stop();
       expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
     });
+
+    describe("Initialization", () => {
+      it.todo("should validate configuration on startup");
+      it.todo("should initialize internal state correctly");
+      it.todo("should setup error handlers");
+      it.todo("should configure rate limiting");
+    });
+
+    describe("Cleanup", () => {
+      it.todo("should cleanup resources on shutdown");
+      it.todo("should cancel pending operations");
+      it.todo("should clear internal state");
+      it.todo("should emit shutdown events");
+    });
   });
 
   describe("Provider Operations", () => {
@@ -148,6 +162,112 @@ describe("Base Provider", () => {
         volume: 1000,
         timestamp: expect.any(Number),
       });
+    });
+
+    describe("Rate Limiting", () => {
+      it.todo("should enforce rate limits");
+      it.todo("should handle concurrent requests");
+      it.todo("should queue excess requests");
+      it.todo("should respect priority levels");
+    });
+
+    describe("Validation", () => {
+      it.todo("should validate input parameters");
+      it.todo("should handle invalid tokens");
+      it.todo("should validate response data");
+      it.todo("should handle validation failures");
+    });
+  });
+
+  describe("Error Handling", () => {
+    describe("Operation Errors", () => {
+      it.todo("should handle network errors");
+      it.todo("should handle timeout errors");
+      it.todo("should handle validation errors");
+      it.todo("should handle rate limit errors");
+    });
+
+    describe("Recovery", () => {
+      it.todo("should implement retry logic");
+      it.todo("should handle partial failures");
+      it.todo("should maintain operation state");
+      it.todo("should log recovery attempts");
+    });
+
+    describe("Error Propagation", () => {
+      it.todo("should emit error events");
+      it.todo("should maintain error context");
+      it.todo("should track error history");
+      it.todo("should classify error types");
+    });
+  });
+
+  describe("State Management", () => {
+    describe("Configuration", () => {
+      it.todo("should handle config updates");
+      it.todo("should validate config changes");
+      it.todo("should maintain config history");
+      it.todo("should emit config events");
+    });
+
+    describe("Runtime State", () => {
+      it.todo("should track operation state");
+      it.todo("should handle state transitions");
+      it.todo("should maintain state consistency");
+      it.todo("should recover from invalid states");
+    });
+
+    describe("Metrics", () => {
+      it.todo("should track operation metrics");
+      it.todo("should measure response times");
+      it.todo("should monitor error rates");
+      it.todo("should track resource usage");
+    });
+  });
+
+  describe("Resource Management", () => {
+    describe("Memory", () => {
+      it.todo("should implement caching");
+      it.todo("should handle cache invalidation");
+      it.todo("should manage memory limits");
+      it.todo("should cleanup unused resources");
+    });
+
+    describe("Connections", () => {
+      it.todo("should manage connection lifecycle");
+      it.todo("should handle connection errors");
+      it.todo("should implement connection pooling");
+      it.todo("should monitor connection health");
+    });
+
+    describe("Queues", () => {
+      it.todo("should manage request queues");
+      it.todo("should handle queue overflow");
+      it.todo("should implement queue priorities");
+      it.todo("should monitor queue metrics");
+    });
+  });
+
+  describe("Observability", () => {
+    describe("Logging", () => {
+      it.todo("should log operation details");
+      it.todo("should track error context");
+      it.todo("should maintain audit trail");
+      it.todo("should implement log levels");
+    });
+
+    describe("Metrics", () => {
+      it.todo("should expose performance metrics");
+      it.todo("should track health metrics");
+      it.todo("should monitor resource metrics");
+      it.todo("should aggregate error metrics");
+    });
+
+    describe("Events", () => {
+      it.todo("should emit lifecycle events");
+      it.todo("should emit error events");
+      it.todo("should emit state changes");
+      it.todo("should handle event subscribers");
     });
   });
 });

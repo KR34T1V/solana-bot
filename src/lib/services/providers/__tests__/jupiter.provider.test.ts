@@ -70,15 +70,6 @@ describe("Jupiter Provider", () => {
   let mockLogger: ManagedLoggingService;
   let mockConnection: Connection;
 
-  /**
-   * Test Setup
-   * ----------
-   * Before each test:
-   * 1. Clear all mocks
-   * 2. Create fresh logger instance
-   * 3. Initialize Solana connection
-   * 4. Create new provider instance
-   */
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogger = new ManagedLoggingService({
@@ -97,11 +88,7 @@ describe("Jupiter Provider", () => {
     );
   });
 
-  /**
-   * Service Lifecycle Tests
-   * ----------------------
-   * Verify proper implementation of the Service interface
-   */
+  // Base Provider Functionality
   describe("Service Lifecycle", () => {
     it("should start correctly", async () => {
       await provider.start();
@@ -113,16 +100,28 @@ describe("Jupiter Provider", () => {
       await provider.stop();
       expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
     });
+
+    describe("Initialization", () => {
+      it.todo("should validate Jupiter SDK configuration");
+      it.todo("should initialize price feeds");
+      it.todo("should setup websocket connections");
+      it.todo("should configure rate limiting");
+    });
+
+    describe("Cleanup", () => {
+      it.todo("should cleanup websocket connections");
+      it.todo("should cancel pending operations");
+      it.todo("should clear price caches");
+      it.todo("should emit shutdown events");
+    });
   });
 
-  /**
-   * Provider Operations Tests
-   * -----------------------
-   * Verify core provider functionality
-   */
   describe("Provider Operations", () => {
-    it("should get price", async () => {
+    beforeEach(async () => {
       await provider.start();
+    });
+
+    it("should get price", async () => {
       const price = await provider.getPrice("SOL");
       expect(price).toEqual({
         price: 1.0,
@@ -130,9 +129,46 @@ describe("Jupiter Provider", () => {
         confidence: 1,
       });
     });
+
+    describe("Rate Limiting", () => {
+      it.todo("should enforce Jupiter API rate limits");
+      it.todo("should handle concurrent quote requests");
+      it.todo("should queue excess route computations");
+      it.todo("should respect priority levels");
+    });
+
+    describe("Validation", () => {
+      it.todo("should validate token addresses");
+      it.todo("should verify route validity");
+      it.todo("should validate quote responses");
+      it.todo("should handle validation failures");
+    });
   });
 
-  // New test suites based on strategy requirements
+  // Jupiter-Specific Functionality
+  describe("DEX Aggregation", () => {
+    describe("Route Discovery", () => {
+      it.todo("should find optimal swap routes");
+      it.todo("should handle multi-hop routes");
+      it.todo("should consider all DEX venues");
+      it.todo("should respect gas costs");
+    });
+
+    describe("Quote Management", () => {
+      it.todo("should fetch accurate quotes");
+      it.todo("should handle quote expiry");
+      it.todo("should implement quote caching");
+      it.todo("should validate quote freshness");
+    });
+
+    describe("Venue Selection", () => {
+      it.todo("should rank trading venues");
+      it.todo("should track venue reliability");
+      it.todo("should monitor venue health");
+      it.todo("should handle venue outages");
+    });
+  });
+
   describe("Price Discovery", () => {
     describe("Real-time Pricing", () => {
       it.todo("should get real-time token prices");
@@ -153,29 +189,6 @@ describe("Jupiter Provider", () => {
       it.todo("should estimate exit price impact");
       it.todo("should handle large order impacts");
       it.todo("should consider market depth in calculations");
-    });
-  });
-
-  describe("Liquidity Analysis", () => {
-    describe("Pool Analysis", () => {
-      it.todo("should analyze pool composition");
-      it.todo("should track pool reserves");
-      it.todo("should monitor pool health metrics");
-      it.todo("should detect pool manipulation");
-    });
-
-    describe("Market Depth", () => {
-      it.todo("should calculate true liquidity depth");
-      it.todo("should track bid-ask spread");
-      it.todo("should monitor order book changes");
-      it.todo("should detect liquidity walls");
-    });
-
-    describe("Volume Analysis", () => {
-      it.todo("should track trading volume");
-      it.todo("should analyze volume distribution");
-      it.todo("should detect wash trading");
-      it.todo("should calculate volume-based metrics");
     });
   });
 
@@ -202,49 +215,52 @@ describe("Jupiter Provider", () => {
     });
   });
 
-  describe("Risk Management", () => {
-    describe("Pre-trade Checks", () => {
-      it.todo("should validate token contracts");
-      it.todo("should check liquidity adequacy");
-      it.todo("should verify price stability");
-      it.todo("should assess market conditions");
+  // Inherited from Base Provider
+  describe("Error Handling", () => {
+    describe("Operation Errors", () => {
+      it.todo("should handle Jupiter API errors");
+      it.todo("should handle quote timeouts");
+      it.todo("should handle route computation failures");
+      it.todo("should handle rate limit errors");
     });
 
-    describe("Trading Limits", () => {
-      it.todo("should enforce position limits");
-      it.todo("should respect volume constraints");
-      it.todo("should implement rate limiting");
-      it.todo("should manage exposure limits");
-    });
-
-    describe("Circuit Breakers", () => {
-      it.todo("should detect abnormal conditions");
-      it.todo("should implement trading pauses");
-      it.todo("should handle market stress");
-      it.todo("should manage recovery procedures");
+    describe("Recovery", () => {
+      it.todo("should retry failed routes");
+      it.todo("should handle partial fills");
+      it.todo("should maintain operation state");
+      it.todo("should log recovery attempts");
     });
   });
 
-  describe("Performance Optimization", () => {
-    describe("Connection Management", () => {
-      it.todo("should optimize RPC usage");
-      it.todo("should handle connection pooling");
-      it.todo("should implement request batching");
-      it.todo("should manage websocket connections");
-    });
-
-    describe("Caching Strategy", () => {
+  describe("Resource Management", () => {
+    describe("Memory", () => {
       it.todo("should cache route computations");
-      it.todo("should maintain price cache");
-      it.todo("should handle cache invalidation");
-      it.todo("should optimize memory usage");
+      it.todo("should handle quote cache invalidation");
+      it.todo("should manage memory limits");
+      it.todo("should cleanup unused routes");
     });
 
-    describe("Resource Management", () => {
-      it.todo("should monitor resource usage");
-      it.todo("should implement cleanup procedures");
-      it.todo("should handle memory pressure");
-      it.todo("should optimize compute resources");
+    describe("Connections", () => {
+      it.todo("should manage Jupiter API connections");
+      it.todo("should handle websocket reconnection");
+      it.todo("should implement connection pooling");
+      it.todo("should monitor API health");
+    });
+  });
+
+  describe("Observability", () => {
+    describe("Metrics", () => {
+      it.todo("should track route computation time");
+      it.todo("should monitor quote accuracy");
+      it.todo("should track execution success rate");
+      it.todo("should measure venue performance");
+    });
+
+    describe("Events", () => {
+      it.todo("should emit route updates");
+      it.todo("should emit price changes");
+      it.todo("should emit venue status");
+      it.todo("should handle event subscribers");
     });
   });
 });

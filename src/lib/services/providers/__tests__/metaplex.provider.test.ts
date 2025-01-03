@@ -64,6 +64,7 @@ describe("Metaplex Provider", () => {
     );
   });
 
+  // Base Provider Functionality
   describe("Service Lifecycle", () => {
     it("should start correctly", async () => {
       await provider.start();
@@ -75,8 +76,43 @@ describe("Metaplex Provider", () => {
       await provider.stop();
       expect(provider.getStatus()).toBe(ServiceStatus.STOPPED);
     });
+
+    describe("Initialization", () => {
+      it.todo("should validate Metaplex SDK configuration");
+      it.todo("should initialize metadata cache");
+      it.todo("should setup account subscriptions");
+      it.todo("should configure rate limiting");
+    });
+
+    describe("Cleanup", () => {
+      it.todo("should cleanup account subscriptions");
+      it.todo("should cancel pending operations");
+      it.todo("should clear metadata cache");
+      it.todo("should emit shutdown events");
+    });
   });
 
+  describe("Provider Operations", () => {
+    beforeEach(async () => {
+      await provider.start();
+    });
+
+    describe("Rate Limiting", () => {
+      it.todo("should enforce RPC rate limits");
+      it.todo("should handle concurrent metadata requests");
+      it.todo("should queue excess operations");
+      it.todo("should respect priority levels");
+    });
+
+    describe("Validation", () => {
+      it.todo("should validate NFT addresses");
+      it.todo("should verify metadata schema");
+      it.todo("should validate creator addresses");
+      it.todo("should handle validation failures");
+    });
+  });
+
+  // Metaplex-Specific Functionality
   describe("Metadata Operations", () => {
     describe("Metadata Retrieval", () => {
       it.todo("should fetch NFT metadata by mint");
@@ -114,13 +150,6 @@ describe("Metaplex Provider", () => {
       it.todo("should monitor creator patterns");
       it.todo("should detect suspicious behavior");
     });
-
-    describe("Trust Scoring", () => {
-      it.todo("should calculate creator trust score");
-      it.todo("should track historical reliability");
-      it.todo("should monitor verification status");
-      it.todo("should update trust metrics");
-    });
   });
 
   describe("Collection Analysis", () => {
@@ -137,81 +166,54 @@ describe("Metaplex Provider", () => {
       it.todo("should analyze price distribution");
       it.todo("should monitor listing activity");
     });
+  });
 
-    describe("Collection Insights", () => {
-      it.todo("should detect wash trading");
-      it.todo("should analyze holder distribution");
-      it.todo("should track royalty compliance");
-      it.todo("should monitor trading patterns");
+  // Inherited from Base Provider
+  describe("Error Handling", () => {
+    describe("Operation Errors", () => {
+      it.todo("should handle metadata errors");
+      it.todo("should handle RPC timeouts");
+      it.todo("should handle URI failures");
+      it.todo("should handle rate limit errors");
+    });
+
+    describe("Recovery", () => {
+      it.todo("should retry failed operations");
+      it.todo("should handle partial metadata");
+      it.todo("should maintain metadata state");
+      it.todo("should log recovery attempts");
     });
   });
 
-  describe("Market Analysis", () => {
-    describe("Price Analysis", () => {
-      it.todo("should track real-time prices");
-      it.todo("should calculate price trends");
-      it.todo("should detect price manipulation");
-      it.todo("should analyze bid patterns");
-    });
-
-    describe("Volume Analysis", () => {
-      it.todo("should monitor trading volume");
-      it.todo("should track unique buyers");
-      it.todo("should analyze sell pressure");
-      it.todo("should detect market manipulation");
-    });
-
-    describe("Liquidity Analysis", () => {
-      it.todo("should calculate market depth");
-      it.todo("should track listing duration");
-      it.todo("should monitor bid/ask spread");
-      it.todo("should analyze market efficiency");
-    });
-  });
-
-  describe("Risk Management", () => {
-    describe("Metadata Risks", () => {
-      it.todo("should detect metadata manipulation");
-      it.todo("should validate URI content");
-      it.todo("should monitor update frequency");
-      it.todo("should track authority changes");
-    });
-
-    describe("Collection Risks", () => {
-      it.todo("should detect collection spam");
-      it.todo("should monitor verification status");
-      it.todo("should track authority activity");
-      it.todo("should analyze collection health");
-    });
-
-    describe("Market Risks", () => {
-      it.todo("should detect market manipulation");
-      it.todo("should monitor trading anomalies");
-      it.todo("should track wash trading");
-      it.todo("should analyze market risks");
-    });
-  });
-
-  describe("Performance Optimization", () => {
-    describe("Caching Strategy", () => {
+  describe("Resource Management", () => {
+    describe("Memory", () => {
       it.todo("should cache metadata responses");
-      it.todo("should implement LRU cache");
       it.todo("should handle cache invalidation");
-      it.todo("should optimize memory usage");
+      it.todo("should manage memory limits");
+      it.todo("should cleanup unused metadata");
     });
 
-    describe("RPC Optimization", () => {
-      it.todo("should batch RPC requests");
-      it.todo("should implement request throttling");
-      it.todo("should handle RPC errors");
-      it.todo("should optimize connection usage");
+    describe("Connections", () => {
+      it.todo("should manage RPC connections");
+      it.todo("should handle connection failures");
+      it.todo("should implement connection pooling");
+      it.todo("should monitor RPC health");
+    });
+  });
+
+  describe("Observability", () => {
+    describe("Metrics", () => {
+      it.todo("should track metadata fetch time");
+      it.todo("should monitor creator verification");
+      it.todo("should track collection updates");
+      it.todo("should measure cache performance");
     });
 
-    describe("Resource Management", () => {
-      it.todo("should monitor memory usage");
-      it.todo("should implement cleanup routines");
-      it.todo("should handle backpressure");
-      it.todo("should optimize compute resources");
+    describe("Events", () => {
+      it.todo("should emit metadata updates");
+      it.todo("should emit creator changes");
+      it.todo("should emit collection events");
+      it.todo("should handle event subscribers");
     });
   });
 });
