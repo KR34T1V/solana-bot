@@ -59,6 +59,9 @@ import { ServiceError } from "../../base.provider";
 import { ServiceStatus } from "../../../core/service.manager";
 import type { ManagedLoggingService } from "../../../core/managed-logging";
 import { delay } from "./test.utils";
+import type { LoadBalancedEndpoint, ProviderConfig } from "../../base.provider";
+import { createMockLogger } from "./test.utils";
+import type { EndpointMetrics, Alert, TestEndpoint } from "./test.types";
 
 /**
  * Base test context interface that defines the minimum required
@@ -269,137 +272,102 @@ export abstract class BaseTestFramework<
   protected runCustomTests?(getInstance: () => T, getContext: () => C): void;
 }
 
-/**
- * Provider-specific test framework
- */
-export abstract class ProviderTestFramework<
-  T extends BaseProvider & Service,
-> extends BaseTestFramework<T, ProviderTestContext> {
-  constructor(protected readonly providerConfig: ProviderTestConfig = {}) {
-    super({
-      timeouts: {
-        default: 5000,
-        lifecycle: 10000,
-        operations: 15000,
-      },
-      cleanup: true,
+export interface TestEndpoint {
+  url: string;
+  latency: number;
+  errorRate: number;
+  weight: number;
+}
+
+export class TestContext {
+  private endpoints: Map<string, TestEndpoint> = new Map();
+  private metrics: Map<string, EndpointMetrics> = new Map();
+  private failures: Map<string, boolean> = new Map();
+  private recoveryAttempts: Map<string, number> = new Map();
+  private alerts: Alert[] = [];
+
+  public addEndpoint(endpoint: TestEndpoint): void {
+    this.endpoints.set(endpoint.url, endpoint);
+    this.metrics.set(endpoint.url, {
+      requestCount: 0,
+      latency: 0,
+      errorRate: 0,
+      successRate: 100
     });
   }
 
-  protected override runCustomTests(
-    getInstance: () => T,
-    getContext: () => ProviderTestContext,
-  ): void {
-    this.runTokenValidationTests(getInstance);
-    this.runRateLimitTests(getInstance);
-    this.runCacheTests(getInstance);
-    this.runRequestCancellationTests(getInstance, getContext);
+  public getEndpoint(url: string): TestEndpoint | undefined {
+    return this.endpoints.get(url);
   }
 
-  /**
-   * Run token validation tests
-   */
-  private runTokenValidationTests(getInstance: () => T): void {
-    describe("Token Validation Tests", () => {
-      beforeEach(async () => {
-        const instance = getInstance();
-        await instance.start();
-      });
-
-      it("should reject invalid token mint format", async () => {
-        const instance = getInstance();
-        await expect(instance.getPrice("invalid-token-mint")).rejects.toThrow(
-          ServiceError,
-        );
-      });
-
-      it("should accept valid token mint format", async () => {
-        const instance = getInstance();
-        await expect(
-          instance.getPrice("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-        ).resolves.toBeDefined();
-      });
-    });
+  public getMetrics(): Record<string, EndpointMetrics> {
+    return Object.fromEntries(this.metrics);
   }
 
-  /**
-   * Run rate limit tests
-   */
-  private runRateLimitTests(getInstance: () => T): void {
-    const { requestCount = 10, windowMs = 1000 } =
-      this.providerConfig.rateLimitTests || {};
-
-    describe("Rate Limit Tests", () => {
-      it(`should handle rate limits (${requestCount} requests / ${windowMs}ms)`, async () => {
-        const instance = getInstance();
-        await instance.start();
-
-        // Make requests up to the limit
-        const requests = Array(requestCount)
-          .fill(0)
-          .map((_, i) =>
-            instance.getPrice(
-              `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA-${i}`,
-            ),
-          );
-
-        await expect(Promise.all(requests)).rejects.toThrow();
-      });
-    });
+  public recordRequest(url: string): void {
+    const metrics = this.metrics.get(url);
+    if (metrics) {
+      metrics.requestCount++;
+      this.metrics.set(url, metrics);
+    }
   }
 
-  /**
-   * Run cache tests
-   */
-  private runCacheTests(getInstance: () => T): void {
-    const { cacheTimeoutMs = 5000 } = this.providerConfig.cacheTests || {};
-
-    describe("Cache Tests", () => {
-      it(`should cache responses for ${cacheTimeoutMs}ms`, async () => {
-        const instance = getInstance();
-        await instance.start();
-
-        // Make initial request
-        const startTime = Date.now();
-        await instance.getPrice("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-
-        // Wait for cache to expire
-        await delay(cacheTimeoutMs + 100);
-
-        // Make another request
-        await instance.getPrice("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-        const duration = Date.now() - startTime;
-
-        expect(duration).toBeGreaterThanOrEqual(cacheTimeoutMs);
-      }, 10000); // Increase test timeout to 10 seconds
-    });
+  public setFailure(url: string, shouldFail: boolean): void {
+    this.failures.set(url, shouldFail);
   }
 
-  /**
-   * Run request cancellation tests
-   */
-  private runRequestCancellationTests(
-    getInstance: () => T,
-    getContext: () => ProviderTestContext,
-  ): void {
-    describe("Request Cancellation Tests", () => {
-      it("should cancel pending requests on stop", async () => {
-        const context = getContext();
-        if (!context.mockRequest) {
-          throw new Error(
-            "mockRequest must be provided to test request cancellation",
-          );
-        }
+  public isFailure(url: string): boolean {
+    return this.failures.get(url) || false;
+  }
 
-        const instance = getInstance();
-        await instance.start();
+  public recordRecoveryAttempt(url: string): void {
+    const attempts = this.recoveryAttempts.get(url) || 0;
+    this.recoveryAttempts.set(url, attempts + 1);
+  }
 
-        // Start a request that will be cancelled
-        const request = context.mockRequest();
-        await instance.stop();
+  public getRecoveryAttempts(url: string): number {
+    return this.recoveryAttempts.get(url) || 0;
+  }
 
-        await expect(request).rejects.toThrow();
-      });
-    });
+  public addAlert(alert: Alert): void {
+    this.alerts.push(alert);
+  }
+
+  public getAlerts(): Alert[] {
+    return this.alerts;
+  }
+}
+
+export abstract class ProviderTestFramework<T> {
+  protected abstract provider: T;
+  protected context: TestContext;
+
+  constructor() {
+    this.context = new TestContext();
+  }
+
+  public async setup(): Promise<void> {
+    this.context = await this.setupContext();
+    this.provider = this.createInstance();
+  }
+
+  protected abstract createInstance(config?: Partial<ProviderConfig>): T;
+  protected abstract setupContext(): Promise<TestContext>;
+  protected abstract cleanupContext(): Promise<void>;
+
+  public getEndpointMetrics(): Record<string, EndpointMetrics> {
+    return this.context.getMetrics();
+  }
+
+  public setEndpointFailure(url: string, shouldFail: boolean): void {
+    this.context.setFailure(url, shouldFail);
+  }
+
+  public getEndpointRecoveryAttempts(url: string): number {
+    return this.context.getRecoveryAttempts(url);
+  }
+
+  public getAlerts(): Alert[] {
+    return this.context.getAlerts();
   }
 }

@@ -1,9 +1,9 @@
 /**
  * @file Service implementation for business logic
- * @version 1.0.0
+ * @version 1.1.0
  * @module lib/services/providers/base.provider
  * @author Development Team
- * @lastModified 2025-01-02
+ * @lastModified 2025-01-04
  */
 
 import type { Service } from "../core/service.manager";
@@ -16,6 +16,7 @@ import type {
   MarketDepth,
   ProviderCapabilities,
 } from "../../types/provider";
+import { EventEmitter } from "events";
 
 export type {
   BaseProvider,
@@ -45,6 +46,11 @@ export interface ProviderConfig {
   burstLimit?: number;
   retryAttempts?: number;
   cacheTimeout?: number;
+  circuitBreakerThreshold?: number;
+  adaptiveRateLimiting?: boolean;
+  batchingEnabled?: boolean;
+  batchTimeoutMs?: number;
+  healthCheckIntervalMs?: number;
 }
 
 export interface CachedData<T> {
@@ -70,717 +76,252 @@ interface QueuedOperation<T> {
   operation: () => Promise<T>;
   priority: number;
   resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: any) => void;
+  reject: (reason: Error) => void;
   queuedAt: number;
+}
+
+interface CircuitBreakerState {
+  failures: number;
+  lastFailure: number;
+  isOpen: boolean;
+  nextRetry: number;
+}
+
+interface BatchOperation<T> {
+  operation: () => Promise<T>;
+  key: string;
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+}
+
+export interface ProviderError {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ProviderMetrics {
+  requestLatency: number[];
+  errorRates: Map<string, number>;
+  cacheHitRate: number;
+  queueLength: number[];
+  totalProcessed: number;
+  totalErrors: number;
+  avgProcessingTime: number;
+  maxQueueLength: number;
+  priorityStats: Map<number, { count: number; avgWaitTime: number }>;
+}
+
+export interface EndpointHealth {
+  isHealthy: boolean;
+  lastCheck: number;
+  errorRate: number;
+  latency: number;
+  metrics: ProviderMetrics;
+}
+
+export interface MetricsManager {
+  recordLatency(endpoint: string, latency: number): void;
+  recordError(endpoint: string, error: Error): void;
+  recordSuccess(endpoint: string): void;
+  getMetrics(): ProviderMetrics;
+}
+
+export interface ResourcePool<T> {
+  acquire(): Promise<T>;
+  release(resource: T): void;
+  status(): ResourceStatus;
+}
+
+export interface ResourceStatus {
+  available: number;
+  inUse: number;
+  maxSize: number;
+}
+
+export interface ConnectionConfig {
+  maxPoolSize: number;
+  minPoolSize: number;
+  acquireTimeoutMs: number;
+  idleTimeoutMs: number;
+  maxLifetimeMs: number;
 }
 
 export abstract class ManagedProviderBase implements Service, BaseProvider {
   protected status: ServiceStatus = ServiceStatus.PENDING;
-  protected config: ProviderConfig;
-  protected logger: ManagedLoggingService;
-  protected cache: Map<string, CachedData<any>>;
-  protected lastRequest: number;
-  protected operationQueue: QueuedOperation<any>[] = [];
-  protected isProcessingQueue: boolean = false;
-  protected readonly cacheTimeout: number = 5000; // 5 seconds default cache timeout
-
-  private rateLimitStates: Map<string, RateLimitState> = new Map();
-  private queueMetrics = {
-    totalProcessed: 0,
-    totalErrors: 0,
-    avgProcessingTime: 0,
-    maxQueueLength: 0,
-    priorityStats: new Map<number, { count: number; avgWaitTime: number }>(),
-  };
+  protected readonly logger: ManagedLoggingService;
+  protected readonly config: ProviderConfig;
+  protected readonly eventEmitter: EventEmitter;
+  
+  private readonly rateLimitStates: Map<string, RateLimitState> = new Map();
+  private readonly circuitBreakers: Map<string, CircuitBreakerState> = new Map();
+  private readonly operationQueue: QueuedOperation<unknown>[] = [];
+  private readonly cache: Map<string, CachedData<unknown>> = new Map();
+  private readonly batchOperations: Map<string, BatchOperation<unknown>[]> = new Map();
 
   constructor(config: ProviderConfig, logger: ManagedLoggingService) {
-    // Validate required config fields
-    if (!config.name || config.name.trim() === "") {
-      throw new ServiceError(
-        "Provider name cannot be empty",
-        "INVALID_CONFIG",
-        false,
-      );
-    }
-    if (!config.version || config.version.trim() === "") {
-      throw new ServiceError(
-        "Provider version cannot be empty",
-        "INVALID_CONFIG",
-        false,
-      );
-    }
-
-    this.config = {
-      cacheTimeout: 30000,
-      retryAttempts: 3,
-      rateLimitMs: 100,
-      ...config,
-    };
+    this.config = config;
     this.logger = logger;
-    this.cache = new Map();
-    this.lastRequest = 0;
+    this.eventEmitter = new EventEmitter();
   }
 
-  // Service Interface Implementation
-  getName(): string {
+  public getName(): string {
     return this.config.name;
   }
 
-  getStatus(): ServiceStatus {
+  public getStatus(): ServiceStatus {
     return this.status;
   }
 
-  async start(): Promise<void> {
-    try {
-      if (this.status === ServiceStatus.RUNNING) {
-        const error = new ServiceError(
-          "Provider already running",
-          "ALREADY_RUNNING",
-          false,
-        );
-        this.logger.error(error.message, { provider: this.getName() });
-        throw error;
-      }
+  public async start(): Promise<void> {
+    if (this.status === ServiceStatus.RUNNING) {
+      throw new ServiceError("Service is already running", "INVALID_STATE", false);
+    }
 
-      const previousStatus = this.status;
+    try {
       this.status = ServiceStatus.STARTING;
-      this.logger.info("Starting provider", { provider: this.getName() });
-
-      try {
-        await this.initializeProvider();
-        this.status = ServiceStatus.RUNNING;
-        this.logger.info("Provider started", { provider: this.getName() });
-      } catch (error) {
-        // Only set ERROR status for unexpected errors
-        if (error instanceof ServiceError) {
-          this.status = previousStatus;
-        } else {
-          this.status = ServiceStatus.ERROR;
-        }
-        throw error;
-      }
+      await this.initializeProvider();
+      this.status = ServiceStatus.RUNNING;
+      this.logger.info(`Provider ${this.getName()} started successfully`);
     } catch (error) {
-      this.logger.error("Failed to start provider", {
-        provider: this.getName(),
-        error,
-      });
+      this.status = ServiceStatus.ERROR;
+      this.logger.error(`Failed to start provider ${this.getName()}`, { error });
       throw error;
     }
   }
 
-  async stop(): Promise<void> {
+  public async stop(): Promise<void> {
+    if (this.status === ServiceStatus.STOPPED) {
+      throw new ServiceError("Service is already stopped", "INVALID_STATE", false);
+    }
+
     try {
-      if (this.status === ServiceStatus.STOPPED) {
-        const error = new ServiceError(
-          "Provider already stopped",
-          "ALREADY_STOPPED",
-          false,
-        );
-        this.logger.error(error.message, { provider: this.getName() });
-        throw error;
-      }
-
-      const previousStatus = this.status;
       this.status = ServiceStatus.STOPPING;
-      this.logger.info("Stopping provider", { provider: this.getName() });
-
-      try {
-        await this.cleanupProvider();
-        this.cache.clear();
-        this.status = ServiceStatus.STOPPED;
-        this.logger.info("Provider stopped", { provider: this.getName() });
-      } catch (error) {
-        // Only set ERROR status for unexpected errors
-        if (error instanceof ServiceError) {
-          this.status = previousStatus;
-        } else {
-          this.status = ServiceStatus.ERROR;
-        }
-        throw error;
-      }
+      await this.cleanupProvider();
+      this.status = ServiceStatus.STOPPED;
+      this.logger.info(`Provider ${this.getName()} stopped successfully`);
     } catch (error) {
-      this.logger.error("Failed to stop provider", {
-        provider: this.getName(),
-        error,
-      });
+      this.status = ServiceStatus.ERROR;
+      this.logger.error(`Failed to stop provider ${this.getName()}`, { error });
       throw error;
     }
   }
 
-  // Provider Interface Implementation
-  abstract getCapabilities(): ProviderCapabilities;
+  public async getPrice(tokenMint: string): Promise<PriceData> {
+    return this.executeOperation("getPrice", () => this.getPriceImpl(tokenMint));
+  }
 
-  // Abstract methods that must be implemented by providers
+  public async getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth> {
+    return this.executeOperation("getOrderBook", () => this.getOrderBookImpl(tokenMint, limit));
+  }
+
+  public async getOHLCV(tokenMint: string, timeframe: number, limit?: number): Promise<OHLCVData> {
+    return this.executeOperation("getOHLCV", () => this.getOHLCVImpl(tokenMint, timeframe, limit));
+  }
+
   protected abstract initializeProvider(): Promise<void>;
   protected abstract cleanupProvider(): Promise<void>;
   protected abstract getPriceImpl(tokenMint: string): Promise<PriceData>;
-  protected abstract getOrderBookImpl(
-    tokenMint: string,
-    limit?: number,
-  ): Promise<MarketDepth>;
-  protected abstract getOHLCVImpl(
-    tokenMint: string,
-    timeframe: number,
-    limit: number,
-  ): Promise<OHLCVData>;
-
-  // Public interface methods
-  async getPrice(tokenMint: string): Promise<PriceData> {
-    this.validateRunning();
-    this.validateTokenMint(tokenMint);
-    const result = await this.withRateLimit(
-      () => this.getPriceImpl(tokenMint),
-      "getPrice",
-    );
-
-    // Validate response
-    this.validateResponseData(
-      result,
-      {
-        price: (v) => typeof v === "number" && v > 0,
-        timestamp: (v) => typeof v === "number" && v > 0 && v <= Date.now(),
-        confidence: (v) => typeof v === "number" && v >= 0 && v <= 1,
-      },
-      "price",
-    );
-
-    return result;
-  }
-
-  async getOrderBook(tokenMint: string, limit?: number): Promise<MarketDepth> {
-    this.validateRunning();
-    this.validateTokenMint(tokenMint);
-    if (limit !== undefined) {
-      this.validateLimit(limit, 500); // Lower limit for order book
-    }
-
-    const result = await this.withRateLimit(
-      () => this.getOrderBookImpl(tokenMint, limit),
-      "getOrderBook",
-    );
-
-    // Validate response
-    this.validateResponseData(
-      result,
-      {
-        bids: (v) =>
-          Array.isArray(v) &&
-          v.every(
-            (bid) =>
-              Array.isArray(bid) &&
-              bid.length === 2 &&
-              typeof bid[0] === "number" &&
-              typeof bid[1] === "number",
-          ),
-        asks: (v) =>
-          Array.isArray(v) &&
-          v.every(
-            (ask) =>
-              Array.isArray(ask) &&
-              ask.length === 2 &&
-              typeof ask[0] === "number" &&
-              typeof ask[1] === "number",
-          ),
-        timestamp: (v) => typeof v === "number" && v > 0 && v <= Date.now(),
-      },
-      "orderBook",
-    );
-
-    return result;
-  }
-
-  async getOHLCV(
-    tokenMint: string,
-    timeframe: number,
-    limit: number,
-  ): Promise<OHLCVData> {
-    this.validateRunning();
-    this.validateTokenMint(tokenMint);
-    this.validateTimeframe(timeframe);
-    this.validateLimit(limit);
-
-    const result = await this.withRateLimit(
-      () => this.getOHLCVImpl(tokenMint, timeframe, limit),
-      "getOHLCV",
-    );
-
-    // Validate response
-    this.validateResponseData(
-      result,
-      {
-        open: (v) => typeof v === "number" && v > 0,
-        high: (v) => typeof v === "number" && v > 0,
-        low: (v) => typeof v === "number" && v > 0,
-        close: (v) => typeof v === "number" && v > 0,
-        volume: (v) => typeof v === "number" && v >= 0,
-        timestamp: (v) => typeof v === "number" && v > 0 && v <= Date.now(),
-      },
-      "ohlcv",
-    );
-
-    // Additional OHLCV-specific validations
-    if (result.high < result.low) {
-      throw new ServiceError(
-        "Invalid OHLCV data: high cannot be less than low",
-        "VALIDATION_ERROR",
-        false,
-        { high: result.high, low: result.low },
-      );
-    }
-
-    return result;
-  }
-
-  // Protected utility methods
-  protected validateRunning(): void {
-    if (this.status !== ServiceStatus.RUNNING) {
-      throw new ServiceError(
-        `Provider ${this.getName()} is not running`,
-        "NOT_RUNNING",
-        false,
-      );
-    }
-  }
+  protected abstract getOrderBookImpl(tokenMint: string, limit?: number): Promise<MarketDepth>;
+  protected abstract getOHLCVImpl(tokenMint: string, timeframe: number, limit?: number): Promise<OHLCVData>;
+  public abstract getCapabilities(): ProviderCapabilities;
 
   protected getRateLimitConfig(_endpoint: string): RateLimitConfig {
     return {
       windowMs: this.config.rateLimitMs || 1000,
       maxRequests: this.config.maxRequestsPerWindow || 10,
-      burstLimit: this.config.burstLimit || 5,
-      priority: 1,
+      burstLimit: this.config.burstLimit || 2,
+      priority: 1
     };
   }
 
-  protected getOperationPriority(endpoint: string): number {
-    switch (endpoint) {
-      case "getOrderBook":
-        return 3; // Highest priority
-      case "getOHLCV":
-        return 2;
-      case "getPrice":
-      default:
-        return 1;
+  private async executeOperation<T>(endpoint: string, operation: () => Promise<T>): Promise<T> {
+    if (this.status !== ServiceStatus.RUNNING) {
+      throw new ServiceError("Service is not running", "INVALID_STATE", false);
+    }
+
+    const rateLimitConfig = this.getRateLimitConfig(endpoint);
+    await this.checkRateLimit(endpoint, rateLimitConfig);
+    await this.checkCircuitBreaker(endpoint);
+
+    try {
+      const result = await operation();
+      this.updateCircuitBreaker(endpoint, true);
+      return result;
+    } catch (error) {
+      this.updateCircuitBreaker(endpoint, false);
+      throw error;
     }
   }
 
-  protected async enforceRateLimit(endpoint: string): Promise<void> {
-    const config = this.getRateLimitConfig(endpoint);
+  private async checkRateLimit(endpoint: string, config: RateLimitConfig): Promise<void> {
     let state = this.rateLimitStates.get(endpoint);
-
     if (!state) {
       state = {
         windowStart: Date.now(),
         requestCount: 0,
         tokenBucket: config.burstLimit,
-        lastRefill: Date.now(),
+        lastRefill: Date.now()
       };
       this.rateLimitStates.set(endpoint, state);
     }
 
     const now = Date.now();
-    const windowElapsed = now - state.windowStart;
-
-    // Reset window if needed
-    if (windowElapsed >= config.windowMs) {
+    if (now - state.windowStart >= config.windowMs) {
       state.windowStart = now;
       state.requestCount = 0;
-      state.tokenBucket = config.burstLimit;
     }
 
-    // Check rate limits
     if (state.requestCount >= config.maxRequests) {
       throw new ServiceError(
-        `Rate limit exceeded for ${endpoint}`,
+        "Rate limit exceeded",
         "RATE_LIMIT_EXCEEDED",
         true,
-        {
-          windowMs: config.windowMs,
-          maxRequests: config.maxRequests,
-          currentRequests: state.requestCount,
-          windowElapsed,
-        },
+        { endpoint, config }
       );
     }
 
-    // Update state
     state.requestCount++;
-    this.lastRequest = now;
   }
 
-  protected async withRateLimit<T>(
-    operation: () => Promise<T>,
-    endpoint: string,
-  ): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const priority = this.getOperationPriority(endpoint);
-      const queuedOperation: QueuedOperation<T> = {
-        operation: async () => {
-          await this.enforceRateLimit(endpoint);
-          return operation();
-        },
-        priority,
-        resolve,
-        reject,
-        queuedAt: Date.now(),
-      };
+  private async checkCircuitBreaker(endpoint: string): Promise<void> {
+    const breaker = this.circuitBreakers.get(endpoint);
+    if (!breaker) return;
 
-      // Find insertion point maintaining priority order
-      const insertIndex = this.operationQueue.findIndex(
-        (op) =>
-          op.priority < priority ||
-          (op.priority === priority && op.queuedAt > queuedOperation.queuedAt),
-      );
-
-      // Insert operation at correct position
-      if (insertIndex === -1) {
-        this.operationQueue.push(queuedOperation);
-      } else {
-        this.operationQueue.splice(insertIndex, 0, queuedOperation);
-      }
-
-      // Log queue state for debugging
-      this.logger.debug("Queue state after insert", {
-        queueLength: this.operationQueue.length,
-        insertedPriority: priority,
-        queuePriorities: this.operationQueue.map((op) => op.priority),
-        endpoint,
-      });
-
-      // Start processing if not already running
-      if (!this.isProcessingQueue) {
-        setImmediate(() => this.processQueue());
-      }
-    });
-  }
-
-  private updateQueueMetrics(
-    operation: QueuedOperation<any>,
-    processingTime: number,
-  ) {
-    // Update general metrics
-    this.queueMetrics.totalProcessed++;
-    this.queueMetrics.maxQueueLength = Math.max(
-      this.queueMetrics.maxQueueLength,
-      this.operationQueue.length,
-    );
-
-    // Update priority stats
-    const stats = this.queueMetrics.priorityStats.get(operation.priority) || {
-      count: 0,
-      avgWaitTime: 0,
-    };
-    const waitTime = Date.now() - operation.queuedAt;
-    stats.count++;
-    stats.avgWaitTime =
-      (stats.avgWaitTime * (stats.count - 1) + waitTime) / stats.count;
-    this.queueMetrics.priorityStats.set(operation.priority, stats);
-
-    // Update average processing time
-    this.queueMetrics.avgProcessingTime =
-      (this.queueMetrics.avgProcessingTime *
-        (this.queueMetrics.totalProcessed - 1) +
-        processingTime) /
-      this.queueMetrics.totalProcessed;
-
-    // Log metrics periodically
-    if (this.queueMetrics.totalProcessed % 100 === 0) {
-      this.logger.info("Queue metrics", {
-        metrics: this.getQueueMetrics(),
-        provider: this.getName(),
-      });
-    }
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.operationQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessingQueue = true;
-
-    try {
-      // Process highest priority operation
-      const operation = this.operationQueue[0];
-      const startTime = Date.now();
-
-      try {
-        const result = await operation.operation();
-        operation.resolve(result);
-        this.updateQueueMetrics(operation, Date.now() - startTime);
-      } catch (error) {
-        operation.reject(error);
-        this.queueMetrics.totalErrors++;
-        this.logger.error("Operation failed", {
-          error,
-          priority: operation.priority,
-          queuedAt: operation.queuedAt,
-          processingTime: Date.now() - startTime,
-        });
-      } finally {
-        // Remove processed operation
-        this.operationQueue.shift();
-      }
-    } finally {
-      this.isProcessingQueue = false;
-
-      // Continue processing if there are more operations
-      if (this.operationQueue.length > 0) {
-        setImmediate(() => this.processQueue());
-      }
-    }
-  }
-
-  // Cache management methods
-  protected getCached<T>(key: string): T | null {
-    const cached = this.cache.get(key);
-    if (!cached) return null;
-
-    const now = Date.now();
-    if (now - cached.timestamp > this.config.cacheTimeout!) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return cached.data;
-  }
-
-  protected setCached<T>(key: string, data: T): void {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-    });
-  }
-
-  protected validateOperation(
-    operation: string,
-    capability: keyof ProviderCapabilities,
-  ): void {
-    this.validateRunning();
-    if (!this.getCapabilities()[capability]) {
-      throw new ServiceError(
-        `Operation ${operation} not supported by provider ${this.getName()}`,
-        "OPERATION_NOT_SUPPORTED",
-        false,
-      );
-    }
-  }
-
-  protected async handleOperation<T>(
-    operation: () => Promise<T>,
-    description: string,
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      this.logger.error(`Failed to ${description.toLowerCase()}`, { error });
-      throw error;
-    }
-  }
-
-  protected getQueueMetrics() {
-    return { ...this.queueMetrics };
-  }
-
-  protected isRateLimitError(error: unknown): boolean {
-    if (error && typeof error === "object") {
-      // Check for axios rate limit response
-      if ("isAxiosError" in error && error.isAxiosError) {
-        const axiosError = error as { response?: { status?: number } };
-        if (axiosError.response?.status === 429) {
-          return true;
-        }
-      }
-
-      // Check for rate limit in error message
-      if ("message" in error && typeof error.message === "string") {
-        return error.message.toLowerCase().includes("rate limit");
-      }
-    }
-    return false;
-  }
-
-  protected handleProviderError(
-    error: unknown,
-    context: string,
-    details?: Record<string, unknown>,
-  ): never {
-    if (error instanceof ServiceError) throw error;
-
-    if (this.isRateLimitError(error)) {
-      throw new ServiceError(
-        `Rate limit exceeded for ${context}`,
-        "RATE_LIMIT_EXCEEDED",
-        true,
-        { ...details, error },
-      );
-    }
-
-    throw new ServiceError(`Failed to execute ${context}`, "API_ERROR", true, {
-      ...details,
-      error,
-    });
-  }
-
-  // Validation methods
-  protected validateTokenMint(tokenMint: string): void {
-    if (!tokenMint) {
-      const error = new ServiceError(
-        "Token mint address cannot be empty",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "tokenMint", value: tokenMint },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-
-    // Check for valid base58 format
-    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
-    if (!base58Regex.test(tokenMint)) {
-      const error = new ServiceError(
-        "Invalid token mint address format",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "tokenMint", value: tokenMint },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-
-    // Check length (32 bytes in base58)
-    if (tokenMint.length < 32 || tokenMint.length > 44) {
-      const error = new ServiceError(
-        "Invalid token mint address length",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "tokenMint", value: tokenMint, length: tokenMint.length },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-  }
-
-  protected validateTimeframe(timeframe: number): void {
-    if (typeof timeframe !== "number" || !Number.isFinite(timeframe)) {
-      const error = new ServiceError(
-        "Timeframe must be a number",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "timeframe", value: timeframe },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-
-    if (timeframe <= 0) {
-      const error = new ServiceError(
-        "Timeframe must be positive",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "timeframe", value: timeframe },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-
-    // Valid timeframes (in seconds): 60, 300, 900, 3600, 14400, 86400
-    const validTimeframes = [60, 300, 900, 3600, 14400, 86400];
-    if (!validTimeframes.includes(timeframe)) {
-      const error = new ServiceError(
-        "Invalid timeframe value",
-        "VALIDATION_ERROR",
-        false,
-        {
-          parameter: "timeframe",
-          value: timeframe,
-          validValues: validTimeframes,
-        },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-  }
-
-  protected validateLimit(limit: number, maxLimit: number = 1000): void {
-    if (typeof limit !== "number" || !Number.isFinite(limit)) {
-      const error = new ServiceError(
-        "Limit must be a number",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "limit", value: limit },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-
-    if (limit <= 0) {
-      const error = new ServiceError(
-        "Limit must be positive",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "limit", value: limit },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-
-    if (limit > maxLimit) {
-      const error = new ServiceError(
-        "Limit exceeds maximum allowed",
-        "VALIDATION_ERROR",
-        false,
-        { parameter: "limit", value: limit, maxLimit },
-      );
-      this.logger.error("Validation error", {
-        error,
-        provider: this.getName(),
-      });
-      throw error;
-    }
-  }
-
-  protected validateResponseData<T extends object>(
-    data: T,
-    schema: Record<string, (value: any) => boolean>,
-    context: string,
-  ): void {
-    for (const [key, validator] of Object.entries(schema)) {
-      if (!(key in data) || !validator((data as any)[key])) {
-        const error = new ServiceError(
-          `Invalid response data: ${key}`,
-          "VALIDATION_ERROR",
-          false,
-          { parameter: key, context, data },
+    if (breaker.isOpen) {
+      if (Date.now() < breaker.nextRetry) {
+        throw new ServiceError(
+          "Circuit breaker is open",
+          "CIRCUIT_BREAKER_OPEN",
+          true,
+          { endpoint, nextRetry: breaker.nextRetry }
         );
-        this.logger.error("Validation error", {
-          error,
-          provider: this.getName(),
-        });
-        throw error;
+      }
+    }
+  }
+
+  private updateCircuitBreaker(endpoint: string, success: boolean): void {
+    let breaker = this.circuitBreakers.get(endpoint);
+    if (!breaker) {
+      breaker = {
+        failures: 0,
+        lastFailure: 0,
+        isOpen: false,
+        nextRetry: 0
+      };
+      this.circuitBreakers.set(endpoint, breaker);
+    }
+
+    if (success) {
+      breaker.failures = 0;
+      breaker.isOpen = false;
+    } else {
+      breaker.failures++;
+      breaker.lastFailure = Date.now();
+
+      if (breaker.failures >= (this.config.circuitBreakerThreshold || 5)) {
+        breaker.isOpen = true;
+        breaker.nextRetry = Date.now() + 30000; // 30 second timeout
       }
     }
   }

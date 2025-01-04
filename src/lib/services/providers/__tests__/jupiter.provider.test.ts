@@ -6,120 +6,203 @@
  * @lastModified 2025-01-02
  */
 
-import { vi, describe } from "vitest";
-import axios from "axios";
-import { JupiterProvider } from "../jupiter.provider";
-import { ProviderTestFramework, type ProviderTestContext } from "./shared/provider.test.framework";
-import { createMockLogger, createMockConnection } from "./shared/test.utils";
-
-// Mock data for testing
-const mockData = {
-  validTokenMint: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-  invalidTokenMint: "invalid-token-mint",
-  priceData: {
-    price: 1.23,
-    confidence: 0.99,
-    timestamp: Date.now(),
-  },
-};
-
-// Mock axios and web3
-vi.mock("axios");
-vi.mock("@solana/web3.js");
+import { beforeEach, describe, expect, it } from "vitest";
+import { JupiterProvider } from "../../providers/jupiter.provider";
+import { ProviderTestFramework, TestContext } from "./shared/provider.test.framework";
+import { ServiceError, type ProviderConfig } from "../../providers/base.provider";
+import type { Alert, PriceData, TestEndpoint } from "../../../../types/test.types";
+import { createMockLogger } from "./shared/test.utils";
+import { Connection } from "@solana/web3.js";
 
 class JupiterProviderTest extends ProviderTestFramework<JupiterProvider> {
-  protected createInstance(): JupiterProvider {
-    return new JupiterProvider(
-      {
-        name: "jupiter-provider",
-        version: "1.0.0",
-        maxRequestsPerWindow: 5,
-      },
-      createMockLogger(),
-      createMockConnection(),
-    );
+  protected provider!: JupiterProvider;
+
+  protected override createInstance(config?: Partial<ProviderConfig>): JupiterProvider {
+    const provider = new JupiterProvider({
+      name: "jupiter-test",
+      version: "1.0.0",
+      rateLimitMs: 100,
+      maxRequestsPerWindow: 10,
+      circuitBreakerThreshold: 3,
+      healthCheckIntervalMs: 1000,
+      adaptiveRateLimiting: true,
+      batchingEnabled: true,
+      ...config
+    }, createMockLogger(), new Connection("http://localhost:8899"));
+
+    // Store original methods
+    const originalStart = provider.start.bind(provider);
+    const originalStop = provider.stop.bind(provider);
+    const originalGetPrice = provider.getPrice.bind(provider);
+
+    // Override methods to make them accessible
+    provider.start = originalStart;
+    provider.stop = originalStop;
+    provider.getPrice = originalGetPrice;
+
+    return provider;
   }
 
-  protected async setupContext(): Promise<ProviderTestContext> {
-    vi.clearAllMocks();
-
-    // Configure mock responses
-    let requestCount = 0;
-    const requestCache = new Map<string, number>();
-
-    const mockResponse = {
-      data: {
-        data: {
-          [mockData.validTokenMint]: {
-            id: mockData.validTokenMint,
-            type: "token",
-            price: mockData.priceData.price.toString(),
-          },
-        },
-        timeTaken: 100,
-      },
-    };
-
-    // Setup rate limiting simulation
-    vi.mocked(axios.get).mockImplementation(async (url: string) => {
-      // Check if the request is cached
-      const lastRequestTime = requestCache.get(url);
-      const now = Date.now();
-      if (lastRequestTime && now - lastRequestTime < 5000) {
-        return mockResponse;
-      }
-
-      // Update request count and cache
-      requestCount++;
-      requestCache.set(url, now);
-
-      // Simulate rate limiting
-      if (requestCount > 5) {
-        const error = new Error("Rate limit exceeded") as any;
-        error.isAxiosError = true;
-        error.response = {
-          status: 429,
-          statusText: "Too Many Requests",
-          data: { message: "Rate limit exceeded" },
-        };
-        throw error;
-      }
-
-      // Simulate a slow request for cancellation testing
-      if (url.includes("slow")) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
-      return mockResponse;
-    });
-
-    const provider = this.createInstance();
-    await provider.start();
-
-    return {
-      provider,
-      logger: createMockLogger(),
-      validTokenMint: mockData.validTokenMint,
-      invalidTokenMint: mockData.invalidTokenMint,
-      mockRequest: () => provider.getPrice(mockData.validTokenMint + "-slow"),
-    };
+  protected override async setupContext(): Promise<TestContext> {
+    const context = new TestContext();
+    context.addEndpoint({
+      url: "https://api.jupiter.test/v1",
+      weight: 2,
+      latency: 100,
+      errorRate: 0
+    } as TestEndpoint);
+    context.addEndpoint({
+      url: "https://api.jupiter.test/v2",
+      weight: 1,
+      latency: 150,
+      errorRate: 0
+    } as TestEndpoint);
+    return context;
   }
 
-  protected async cleanupContext(): Promise<void> {
-    vi.clearAllMocks();
+  protected override async cleanupContext(): Promise<void> {
+    if (this.provider) {
+      await this.provider.stop();
+    }
+  }
+
+  // Make protected methods accessible for testing
+  public async startProvider(): Promise<void> {
+    await this.provider.start();
+  }
+
+  public async getPrice(token: string): Promise<PriceData> {
+    return this.provider.getPrice(token);
   }
 }
 
-// Run the tests
-describe("Jupiter Provider", () => {
-  const testSuite = new JupiterProviderTest({
-    rateLimitTests: {
-      requestCount: 10,
-      windowMs: 1000,
-    },
-    cacheTests: {
-      cacheTimeoutMs: 5000,
-    },
+describe("JupiterProvider", () => {
+  let testFramework: JupiterProviderTest;
+
+  beforeEach(async () => {
+    testFramework = new JupiterProviderTest();
+    await testFramework.setup();
+    await testFramework.startProvider();
   });
-  testSuite.runTests("Jupiter Provider");
+
+  describe("Load Balancing", () => {
+    it("should distribute requests across endpoints", async () => {
+      const requests = Array(10).fill(null).map(() => 
+        testFramework.getPrice("SOL")
+      );
+      
+      await Promise.allSettled(requests);
+      
+      const metrics = testFramework.getEndpointMetrics();
+      expect(metrics["https://api.jupiter.test/v1"].requestCount).toBeGreaterThan(0);
+      expect(metrics["https://api.jupiter.test/v2"].requestCount).toBeGreaterThan(0);
+    });
+
+    it("should failover to backup endpoints", async () => {
+      testFramework.setEndpointFailure("https://api.jupiter.test/v1", true);
+      
+      const result = await testFramework.getPrice("SOL");
+      expect(result).toBeDefined();
+      
+      const metrics = testFramework.getEndpointMetrics();
+      expect(metrics["https://api.jupiter.test/v2"].requestCount).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Circuit Breaker", () => {
+    it("should open circuit after consecutive failures", async () => {
+      testFramework.setEndpointFailure("https://api.jupiter.test/v1", true);
+      
+      const requests = Array(5).fill(null).map(() => 
+        testFramework.getPrice("SOL").catch((error: Error) => error)
+      );
+      
+      const results = await Promise.all(requests);
+      
+      const circuitOpenErrors = results.filter(
+        (result: Error | PriceData): result is Error => 
+          result instanceof ServiceError && result.code === "CIRCUIT_OPEN"
+      );
+      expect(circuitOpenErrors.length).toBeGreaterThan(0);
+    });
+
+    it("should attempt recovery after circuit opens", async () => {
+      testFramework.setEndpointFailure("https://api.jupiter.test/v1", true);
+      
+      const requests = Array(5).fill(null).map(() => 
+        testFramework.getPrice("SOL").catch((error: Error) => error)
+      );
+      await Promise.all(requests);
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      testFramework.setEndpointFailure("https://api.jupiter.test/v1", false);
+      
+      const recoveryAttempts = testFramework.getEndpointRecoveryAttempts("https://api.jupiter.test/v1");
+      expect(recoveryAttempts).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Request Optimization", () => {
+    it("should coalesce identical requests", async () => {
+      const requests = Array(3).fill(null).map(() => 
+        testFramework.getPrice("SOL")
+      );
+      
+      await Promise.all(requests);
+      
+      const metrics = testFramework.getEndpointMetrics();
+      const totalRequests = Object.values(metrics).reduce(
+        (sum, metric) => sum + metric.requestCount, 0
+      );
+      expect(totalRequests).toBeLessThan(3);
+    });
+
+    it("should batch similar requests", async () => {
+      const requests = [
+        testFramework.getPrice("SOL"),
+        testFramework.getPrice("RAY"),
+        testFramework.getPrice("SRM")
+      ];
+      
+      await Promise.all(requests);
+      
+      const metrics = testFramework.getEndpointMetrics();
+      const totalRequests = Object.values(metrics).reduce(
+        (sum, metric) => sum + metric.requestCount, 0
+      );
+      expect(totalRequests).toBeLessThan(3);
+    });
+  });
+
+  describe("Health Monitoring", () => {
+    it("should track health metrics", async () => {
+      const requests = Array(5).fill(null).map(() => 
+        testFramework.getPrice("SOL")
+      );
+      await Promise.all(requests);
+      
+      const metrics = testFramework.getEndpointMetrics();
+      expect(metrics["https://api.jupiter.test/v1"].latency).toBeDefined();
+      expect(metrics["https://api.jupiter.test/v1"].errorRate).toBeDefined();
+      expect(metrics["https://api.jupiter.test/v1"].successRate).toBeDefined();
+    });
+
+    it("should raise alerts on high error rates", async () => {
+      testFramework.setEndpointFailure("https://api.jupiter.test/v1", true);
+      
+      const requests = Array(10).fill(null).map(() => 
+        testFramework.getPrice("SOL").catch((error: Error) => error)
+      );
+      
+      await Promise.all(requests);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const alerts = testFramework.getAlerts();
+      const errorRateAlerts = alerts.filter((alert: Alert) => 
+        alert.message.includes("High error rate")
+      );
+      expect(errorRateAlerts.length).toBeGreaterThan(0);
+    });
+  });
 });
