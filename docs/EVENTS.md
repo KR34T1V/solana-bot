@@ -1,248 +1,250 @@
 # Event System Architecture
 
 ## Overview
-This document outlines the event system architecture for the Solana Bot project. The system is designed to be dynamic, extensible, and maintainable while handling complex trading operations.
+This document outlines the event system architecture for the Solana Bot project. The system follows a domain-driven, modular design that ensures clear separation of concerns, maintainability, and scalability.
 
 ## Core Philosophy
-The system is designed around three key principles:
-- **Adaptability**: Events can evolve without breaking existing functionality
-- **Extensibility**: New features can be added without modifying core code
-- **Discoverability**: System behavior is transparent and self-documenting
+The system is designed around four key principles:
+- **Domain Isolation**: Each event domain is self-contained and independently maintainable
+- **Consistent Patterns**: Standardized structure across all event domains
+- **Shared Resources**: Common functionality extracted to shared modules
+- **Clean APIs**: Clear and controlled public interfaces
 
-## Key Components
+## System Structure
 
-### Event Schema Registry
-- Acts as a "source of truth" for event definitions
-- Manages versioning and evolution of event types
-- Provides runtime validation of event structures
-- Enables automatic migration between versions
-- Allows dynamic registration of new event types
+### Domain Organization
+```
+events/
+├── market/          # Market-related events
+├── trading/         # Trading-related events
+├── system/          # System-related events
+├── user/           # User-related events
+├── shared/         # Shared functionality
+└── factories/      # Event creation factories
+```
 
-### Dynamic Event Structure
-- Flexible core event format that can adapt over time
-- Self-describing metadata system
-- Extensible properties that don't break existing handlers
-- Built-in support for event relationships and tracking
-- Custom fields can be added without schema changes
+### Domain Modules
+Each domain module (market, trading, system, user) contains:
 
-### Handler Registry
-Think of this as a "smart router" for events:
-- Dynamic registration of event handlers at runtime
-- Priority-based processing
-- Conditional handling based on event properties
-- Versioning support for handlers
-- Built-in retry and timeout mechanisms
+1. **Handlers/**
+   - Event-specific processing logic
+   - Business rule implementation
+   - State management
+   - Error handling
 
-### Plugin System
-Like a "middleware layer" that can:
-- Intercept and modify events at various stages
-- Add cross-cutting concerns (logging, metrics, etc.)
-- Extend system functionality without core changes
-- Enable/disable features dynamically
-- Provide hooks for custom processing logic
+2. **Types/**
+   - Event type definitions
+   - Validation schemas
+   - Type guards
+   - Utility types
 
-### Channel System
-Think of this as "smart event streams":
-- Creates logical groupings of related events
-- Enables different processing rules per channel
-- Supports filtering and transformation
-- Handles backpressure and buffering
-- Allows priority-based routing
+3. **index.ts**
+   - Public API
+   - Type exports
+   - Handler exports
 
-### Configuration Management
-The "control center" that:
-- Manages system behavior at runtime
-- Enables dynamic updates to system settings
-- Provides monitoring and alerting capabilities
-- Stores and loads different configurations
-- Watches for changes and updates components
+### Shared Resources
+Located in `shared/`:
+- Base handler classes
+- Common type definitions
+- Shared utilities
+- Error definitions
 
-## Key Benefits
+### Factory System
+Located in `factories/`:
+- Domain-specific factories
+- Event creation logic
+- Validation rules
+- Type safety enforcement
 
-### For Developers
-- Easy to add new event types
-- Simple handler registration
-- Clear event validation
-- Built-in versioning support
-- Flexible extension points
+## Event Domains
 
-### For Operations
-- Runtime configuration changes
-- Monitoring and metrics built-in
-- Dynamic scaling capabilities
-- Error handling and recovery
-- Performance optimization options
+### 1. Market Events
+Handles market data and state:
+- Price updates
+- Liquidity changes
+- Order book depth
+- Market state changes
 
-### For Business
-- Rapid feature deployment
-- System evolution without downtime
-- Easy integration of new requirements
-- Reliable event processing
-- Audit and compliance support
+Example:
+```typescript
+interface PriceUpdateEvent {
+  type: 'PRICE_UPDATE';
+  symbol: string;
+  price: number;
+  timestamp: number;
+  source: string;
+}
+```
 
-## Real-World Example
+### 2. Trading Events
+Manages trading operations:
+- Order lifecycle
+- Position management
+- Trade execution
+- Strategy signals
 
-### Trading System Event Flow
+Example:
+```typescript
+interface OrderEvent {
+  type: 'ORDER_CREATED' | 'ORDER_EXECUTED' | 'ORDER_CANCELLED';
+  orderId: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  status: OrderStatus;
+}
+```
 
-1. **Price Update Received**
-   - Event captured with metadata
-   - Validated against schema
-   - Routed to appropriate channels
-   - Processed by registered handlers
+### 3. System Events
+Handles system operations:
+- Error tracking
+- Health monitoring
+- Performance metrics
+- Configuration changes
 
-2. **Multiple Handlers Process Event**
-   - Trading strategy evaluation
-   - Risk assessment
-   - Position updates
-   - Notification generation
+Example:
+```typescript
+interface HealthEvent {
+  type: 'HEALTH_CHECK';
+  component: string;
+  status: 'HEALTHY' | 'DEGRADED' | 'FAILED';
+  metrics: HealthMetrics;
+}
+```
 
-3. **Plugins Add Functionality**
-   - Audit logging
-   - Performance metrics
-   - Error tracking
-   - Compliance checks
+### 4. User Events
+Manages user interactions:
+- User actions
+- Preference updates
+- Strategy modifications
+- Session management
 
-4. **System Adapts to Changes**
-   - New trading rules added via plugins
-   - Handler priorities adjusted
-   - Channel configurations updated
-   - New event types registered
+Example:
+```typescript
+interface UserActionEvent {
+  type: 'USER_ACTION';
+  userId: string;
+  action: string;
+  timestamp: number;
+  context: Record<string, unknown>;
+}
+```
 
-## Evolution Capabilities
+## Handler Implementation
 
-The system can evolve in several ways:
+### Base Handler
+```typescript
+abstract class BaseEventHandler<T extends BaseEvent> {
+  abstract handle(event: T): Promise<void>;
+  protected validate(event: T): boolean;
+  protected logEvent(event: T): void;
+}
+```
 
-### Horizontal Evolution
-- Add new event types
-- Create new handlers
-- Define new channels
-- Install new plugins
+### Domain Handler Example
+```typescript
+class PriceUpdateHandler extends BaseEventHandler<PriceUpdateEvent> {
+  async handle(event: PriceUpdateEvent): Promise<void> {
+    this.validate(event);
+    // Process price update
+    this.logEvent(event);
+  }
+}
+```
 
-### Vertical Evolution
-- Enhance existing events
-- Upgrade handler logic
-- Improve channel processing
-- Update plugin behavior
+## Factory Implementation
 
-### Runtime Evolution
-- Change configurations
-- Adjust priorities
-- Modify routing rules
-- Update validation rules
+### Base Factory
+```typescript
+abstract class BaseEventFactory<T extends BaseEvent> {
+  abstract create(data: Partial<T>): Promise<T>;
+  protected validate(event: T): boolean;
+  protected enrich(event: T): T;
+}
+```
 
-## Scaling Considerations
-
-The system is designed to scale across:
-
-### Volume
-- Multiple processing channels
-- Buffering and backpressure
-- Priority-based processing
-- Load balancing support
-
-### Complexity
-- Plugin architecture
-- Flexible event structure
-- Dynamic configuration
-- Versioning support
-
-### Features
-- Easy handler addition
-- Plugin extensibility
-- Channel configuration
-- Schema evolution
-
-## Event Types
-
-### Market Events
-- Price Updates
-- Liquidity Changes
-- Trading Status Changes
-- Market Depth Updates
-
-### Trading Events
-- Order Creation
-- Order Execution
-- Order Cancellation
-- Trade Settlement
-
-### Risk Events
-- Limit Breaches
-- Exposure Warnings
-- Risk Level Changes
-- Position Updates
-
-### System Events
-- Configuration Changes
-- Health Status Updates
-- Error Notifications
-- Performance Metrics
-
-## Implementation Guidelines
-
-### Event Creation
-1. Define event schema
-2. Register with Schema Registry
-3. Implement validation rules
-4. Create necessary handlers
-5. Configure routing rules
-
-### Handler Implementation
-1. Define handler interface
-2. Implement processing logic
-3. Configure retry policies
-4. Set up error handling
-5. Register with Handler Registry
-
-### Plugin Development
-1. Implement plugin interface
-2. Define hook points
-3. Add configuration options
-4. Test plugin behavior
-5. Deploy and enable
+### Domain Factory Example
+```typescript
+class MarketEventFactory extends BaseEventFactory<MarketEvent> {
+  async create(data: Partial<MarketEvent>): Promise<MarketEvent> {
+    const event = this.enrich(data);
+    this.validate(event);
+    return event;
+  }
+}
+```
 
 ## Best Practices
 
-### Event Design
+### 1. Event Design
 - Keep events focused and atomic
 - Include necessary context
 - Version from the start
-- Plan for evolution
-- Document clearly
+- Use strict typing
+- Follow naming conventions
 
-### Handler Design
+### 2. Handler Design
 - Single responsibility
 - Clear error handling
 - Proper logging
 - Performance monitoring
-- Version compatibility
+- State isolation
 
-### System Configuration
-- Environment-specific settings
-- Feature flags
-- Performance tuning
-- Monitoring setup
-- Backup strategies
+### 3. Factory Design
+- Strong validation
+- Type safety
+- Context enrichment
+- Error handling
+- Performance optimization
+
+## Testing Strategy
+
+### 1. Unit Tests
+- Handler logic
+- Factory creation
+- Type validation
+- Error cases
+
+### 2. Integration Tests
+- Event flow
+- Handler chains
+- Cross-domain interaction
+- State management
+
+### 3. Performance Tests
+- Event throughput
+- Handler performance
+- Memory usage
+- Backpressure handling
 
 ## Monitoring and Maintenance
 
-### Key Metrics
+### Metrics
 - Event processing rates
 - Handler performance
 - Error rates
-- System latency
-- Resource utilization
+- Memory usage
+- Queue sizes
 
 ### Health Checks
-- Schema validation
 - Handler status
-- Plugin health
-- Channel backpressure
-- System resources
+- Factory status
+- Queue status
+- Processing latency
+- Error rates
 
-### Troubleshooting
-- Event logging
-- Error tracking
-- Performance profiling
-- System diagnostics
-- Debug tooling 
+## Evolution Strategy
+
+### Adding New Events
+1. Define event types
+2. Create handlers
+3. Implement factory
+4. Add tests
+5. Update documentation
+
+### Modifying Existing Events
+1. Version the event
+2. Update handlers
+3. Maintain compatibility
+4. Update tests
+5. Document changes 
