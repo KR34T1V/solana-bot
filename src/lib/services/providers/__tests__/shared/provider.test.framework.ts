@@ -4,71 +4,19 @@
  * @module lib/services/providers/__tests__/shared/provider.test.framework
  * @author Development Team
  * @lastModified 2025-01-02
- *
- * @description
- * This framework provides a standardized approach to testing provider implementations.
- * It enforces consistent test patterns across all providers while allowing for
- * provider-specific test extensions.
- *
- * Key Features:
- * - Automated lifecycle testing
- * - Standardized error handling verification
- * - State transition validation
- * - Rate limiting and caching tests
- * - Request cancellation testing
- *
- * Test Categories:
- * 1. Lifecycle Tests
- *    - Service startup/shutdown
- *    - State transitions
- *    - Resource cleanup
- *
- * 2. Error Handling Tests
- *    - Invalid operations
- *    - Rate limit handling
- *    - Network failures
- *
- * 3. Provider-Specific Tests
- *    - Custom API behaviors
- *    - Special error cases
- *    - Provider-specific features
- *
- * Usage:
- * ```typescript
- * class CustomProviderTest extends ProviderTestFramework<CustomProvider> {
- *   protected createInstance(): CustomProvider {
- *     return new CustomProvider(config);
- *   }
- *
- *   protected async setupContext(): Promise<ProviderTestContext> {
- *     // Setup test context
- *   }
- *
- *   protected async cleanupContext(): Promise<void> {
- *     // Cleanup resources
- *   }
- * }
- * ```
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { Service } from "../../../interfaces/service";
-import type { BaseProvider } from "../../../../types/provider";
 import type { ManagedProviderBase } from "../../base.provider";
-import { ServiceError } from "../../base.provider";
 import { ServiceStatus } from "../../../core/service.manager";
 import type { ManagedLoggingService } from "../../../core/managed-logging";
-import { delay } from "./test.utils";
-import type { LoadBalancedEndpoint, ProviderConfig } from "../../base.provider";
-import { createMockLogger } from "./test.utils";
+import type { ProviderConfig } from "../../base.provider";
 import type { EndpointMetrics, Alert, TestEndpoint } from "./test.types";
 
 /**
  * Base test context interface that defines the minimum required
  * testing environment for all services.
- *
- * @interface BaseTestContext
- * @property {ManagedLoggingService} logger - Logging service for test execution
  */
 export interface BaseTestContext {
   logger: ManagedLoggingService;
@@ -77,28 +25,16 @@ export interface BaseTestContext {
 /**
  * Extended test context specific to provider testing. Includes
  * additional properties needed for provider-specific tests.
- *
- * @interface ProviderTestContext
- * @extends BaseTestContext
- * @property {ManagedProviderBase} provider - Provider instance being tested
- * @property {string} validTokenMint - Known valid token mint for testing
- * @property {string} invalidTokenMint - Known invalid token mint for testing
- * @property {Function} mockRequest - Optional function to create test requests
  */
 export interface ProviderTestContext extends BaseTestContext {
   provider: ManagedProviderBase;
   validTokenMint: string;
   invalidTokenMint: string;
-  mockRequest?: () => Promise<any>;
+  mockRequest?: () => Promise<unknown>;
 }
 
 /**
  * Configuration interface for customizing test execution behavior.
- *
- * @interface TestConfig
- * @property {Object} timeouts - Timeout configurations for different test types
- * @property {number} retryAttempts - Number of retries for flaky tests
- * @property {boolean} cleanup - Whether to run cleanup after each test
  */
 export interface TestConfig {
   timeouts?: {
@@ -112,10 +48,6 @@ export interface TestConfig {
 
 /**
  * Provider-specific test configuration for customizing provider test behavior.
- *
- * @interface ProviderTestConfig
- * @property {Object} rateLimitTests - Configuration for rate limiting tests
- * @property {Object} cacheTests - Configuration for cache behavior tests
  */
 export interface ProviderTestConfig {
   rateLimitTests?: {
@@ -128,7 +60,9 @@ export interface ProviderTestConfig {
 }
 
 /**
- * Abstract base class for all test suites
+ * Base test framework for service testing.
+ * @template T - The service type being tested
+ * @template C - The test context type
  */
 export abstract class BaseTestFramework<
   T extends Service,
@@ -140,9 +74,6 @@ export abstract class BaseTestFramework<
 
   constructor(protected readonly config: TestConfig = {}) {}
 
-  /**
-   * Run the complete test suite
-   */
   public runTests(suiteName: string): void {
     describe(suiteName, () => {
       let instance: T;
@@ -174,9 +105,6 @@ export abstract class BaseTestFramework<
     });
   }
 
-  /**
-   * Run service lifecycle tests
-   */
   protected runLifecycleTests(getInstance: () => T): void {
     describe("Lifecycle Tests", () => {
       it("should have a valid name", () => {
@@ -216,9 +144,6 @@ export abstract class BaseTestFramework<
     });
   }
 
-  /**
-   * Run error handling tests
-   */
   protected runErrorHandlingTests(getInstance: () => T): void {
     describe("Error Handling Tests", () => {
       it("should not allow starting an already running service", async () => {
@@ -239,7 +164,7 @@ export abstract class BaseTestFramework<
         try {
           await instance.start();
           throw new Error("Test error");
-        } catch (error: any) {
+        } catch (error) {
           expect(instance.getStatus()).toBe(ServiceStatus.RUNNING);
         }
         await instance.stop();
@@ -248,9 +173,6 @@ export abstract class BaseTestFramework<
     });
   }
 
-  /**
-   * Run state transition tests
-   */
   protected runStateTransitionTests(getInstance: () => T): void {
     describe("State Transition Tests", () => {
       it("should follow correct state transitions", async () => {
@@ -266,19 +188,12 @@ export abstract class BaseTestFramework<
     });
   }
 
-  /**
-   * Optional method for running custom tests specific to the service type
-   */
   protected runCustomTests?(getInstance: () => T, getContext: () => C): void;
 }
 
-export interface TestEndpoint {
-  url: string;
-  latency: number;
-  errorRate: number;
-  weight: number;
-}
-
+/**
+ * Test context implementation for managing test state and metrics.
+ */
 export class TestContext {
   private endpoints: Map<string, TestEndpoint> = new Map();
   private metrics: Map<string, EndpointMetrics> = new Map();
