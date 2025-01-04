@@ -10,7 +10,19 @@
     "sourceMap": true,
     "strict": true,
     "noImplicitOverride": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/*"],
+      "@errors/*": ["src/errors/*"],
+      "@events/*": ["src/events/*"],
+      "@factories/*": ["src/factories/*"],
+      "@services/*": ["src/services/*"],
+      "@types/*": ["src/types/*"],
+      "@utils/*": ["src/utils/*"],
+      "@lib/*": ["src/lib/*"],
+      "@tests/*": ["src/tests/*"]
+    }
   },
   "include": [
     "src/**/*.d.ts",
