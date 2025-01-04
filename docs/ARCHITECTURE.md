@@ -20,10 +20,59 @@ This document outlines the hybrid architecture of the Solana bot application. Th
    - Market Analysis
 
 3. **Event Stream** (Event-Sourcing)
-   - Market Data Events
-   - Trading Action Events
-   - System State Events
-   - User Action Events
+   The event system follows a dynamic and extensible architecture detailed in `EVENTS.md`. Key aspects include:
+
+   - **Event Schema Registry**
+     - Source of truth for event definitions
+     - Version management and evolution
+     - Runtime validation
+     - Dynamic registration
+
+   - **Handler System**
+     - Dynamic handler registration
+     - Priority-based processing
+     - Versioning support
+     - Retry mechanisms
+
+   - **Plugin Architecture**
+     - Middleware capabilities
+     - Cross-cutting concerns
+     - Dynamic feature toggling
+     - Processing hooks
+
+   - **Channel System**
+     - Logical event grouping
+     - Custom processing rules
+     - Backpressure handling
+     - Priority routing
+
+   - **Event Types**
+     - Market Data Events
+       - Price updates
+       - Liquidity changes
+       - Trading status
+       - Market depth
+
+     - Trading Action Events
+       - Order lifecycle
+       - Trade execution
+       - Position updates
+       - Strategy signals
+
+     - System State Events
+       - Configuration changes
+       - Health updates
+       - Performance metrics
+       - Error notifications
+
+     - User Action Events
+       - Trading commands
+       - Configuration changes
+       - Risk parameter updates
+       - Strategy modifications
+
+   For detailed implementation guidelines, testing requirements, and best practices, 
+   refer to the comprehensive event system documentation in `EVENTS.md`.
 
 4. **Query Layer** (CQRS)
    - Real-time Market Views
