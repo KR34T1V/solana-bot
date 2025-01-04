@@ -194,22 +194,29 @@ interface EventBus {
 ## Directory Structure
 ```
 src/
-├── services/              # Full service implementations
-│   ├── trading/          # Trading engine service
-│   ├── risk/             # Risk management service
-│   └── portfolio/        # Portfolio management service
-├── functions/            # Pure functional implementations
-│   ├── calculations/     # Mathematical calculations
-│   ├── validation/       # Business rule validation
-│   └── analysis/         # Market analysis functions
-├── events/               # Event system implementation
-│   ├── bus/             # Event bus implementation
-│   ├── streams/         # Event stream processing
-│   └── handlers/        # Event handlers
-└── query/                # Query layer implementation
-    ├── views/           # Real-time view models
-    ├── analytics/       # Analytics processors
-    └── reports/         # Report generators
+├── core/                  # Core system functionality
+│   ├── events/           # Event system implementation
+│   │   ├── types/       # Event type definitions
+│   │   │   └── errors/  # Error event types
+│   │   ├── schemas/     # Event validation schemas
+│   │   │   └── errors/  # Error event schemas
+│   │   ├── factories/   # Event creation factories
+│   │   │   └── errors/  # Error event factories
+│   │   └── handlers/    # Event handlers and processors
+│   │       └── errors/  # Error event handlers
+│   └── utils/           # Core utilities
+├── services/             # Full service implementations
+│   ├── trading/         # Trading engine service
+│   ├── risk/            # Risk management service
+│   └── portfolio/       # Portfolio management service
+├── functions/           # Pure functional implementations
+│   ├── calculations/    # Mathematical calculations
+│   ├── validation/      # Business rule validation
+│   └── analysis/        # Market analysis functions
+└── query/               # Query layer implementation
+    ├── views/          # Real-time view models
+    ├── analytics/      # Analytics processors
+    └── reports/        # Report generators
 ```
 
 ## Development Guidelines

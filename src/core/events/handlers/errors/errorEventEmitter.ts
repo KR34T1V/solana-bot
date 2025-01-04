@@ -1,5 +1,5 @@
-import type { EventFactory } from '../factories/events/EventFactory';
-import type { ErrorOccurredEvent } from '../types/events';
+import type { EventFactory } from '@factories/events/EventFactory';
+import type { ErrorOccurredEvent } from '@types/events';
 import type { ApplicationError } from './base';
 
 export class ErrorEventEmitter {
