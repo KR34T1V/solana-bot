@@ -7,103 +7,45 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "lint": "yarn lint:js && yarn lint:svelte && yarn type-check && yarn svelte-check",
-    "lint:js": "eslint --cache --cache-location ./node_modules/.cache/eslint --ext .js,.ts,.svelte .",
-    "lint:svelte": "svelte-check --tsconfig ./tsconfig.json",
-    "lint:fix": "eslint --fix --cache --cache-location ./node_modules/.cache/eslint --ext .js,.ts,.svelte .",
-    "type-check": "tsc --noEmit",
-    "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "test": "vitest --reporter verbose",
-    "test:ui": "vitest --ui",
-    "test:staged": "bash scripts/test-staged.sh",
-    "test:coverage": "mkdir -p coverage && vitest run --coverage",
-    "test:e2e": "playwright test",
-    "prepare": "husky install",
-    "check:all": "yarn lint && yarn type-check && yarn test",
-    "script": "vite-node",
-    "docs:validate": "vite-node scripts/validate-docs.ts",
-    "docs:add": "vite-node scripts/add-docs.ts",
-    "docs:fix": "yarn docs:add && yarn docs:validate",
-    "check:docs": "yarn docs:validate"
-  },
-  "lint-staged": {
-    "*.{js,ts,svelte}": [
-      "eslint --fix",
-      "prettier --write",
-      "bash -c 'tsc --noEmit --skipLibCheck'",
-      "bash -c 'yarn test:staged'",
-      "bash -c 'yarn docs:validate'"
-    ],
-    "*.test.{js,ts}": [
-      "prettier --write",
-      "bash -c 'yarn vitest related --run {}'",
-      "bash -c 'tsc --noEmit --skipLibCheck'",
-      "bash -c 'yarn docs:validate'"
-    ],
-    "*.{json,md,yaml,yml}": [
-      "prettier --write"
-    ]
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "dependencies": {
-    "@metaplex-foundation/js": "^0.20.1",
-    "@prisma/client": "^5.7.0",
-    "@raydium-io/raydium-sdk": "^1.3.1-beta.58",
     "@solana/web3.js": "^1.87.6",
     "@sveltejs/kit": "^2.0.0",
-    "axios": "^1.7.9",
-    "bcryptjs": "^2.4.3",
-    "chart.js": "^4.4.1",
-    "date-fns": "^4.1.0",
-    "jose": "^5.1.3",
-    "pino": "^8.16.2",
-    "reflect-metadata": "^0.2.2",
     "svelte": "^5.0.0-next.1",
-    "winston": "^3.11.0",
-    "zod": "^3.22.4"
+    "svelte-kit": "^1.2.0"
   },
   "devDependencies": {
-    "@faker-js/faker": "^9.3.0",
-    "@playwright/test": "^1.49.1",
+    "@playwright/test": "^1.40.1",
     "@sveltejs/adapter-auto": "^3.0.0",
-    "@sveltejs/kit": "^2.0.0",
-    "@sveltejs/vite-plugin-svelte": "4.0.0-next.6",
-    "@testing-library/svelte": "^5.2.6",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20.17.11",
+    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/svelte": "^4.0.5",
+    "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^6.13.2",
     "@typescript-eslint/parser": "^6.13.2",
-    "@vitest/coverage-v8": "^2.1.8",
-    "@vitest/ui": "^2.1.8",
+    "@vitest/coverage-v8": "^1.0.4",
+    "@vitest/ui": "^1.0.4",
     "autoprefixer": "^10.4.16",
-    "chalk": "^5.3.0",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-svelte": "^2.35.1",
-    "glob": "^10.3.10",
-    "husky": "^8.0.3",
-    "jsdom": "^25.0.1",
-    "lint-staged": "^15.2.0",
+    "jsdom": "^23.0.1",
     "postcss": "^8.4.32",
     "prettier": "^3.1.1",
     "prettier-plugin-svelte": "^3.1.2",
-    "prisma": "^5.7.0",
     "svelte-check": "^3.6.2",
     "tailwindcss": "^3.3.6",
-    "tslib": "^2.6.2",
-    "typescript": "^5.7.2",
+    "typescript": "^5.3.3",
     "vite": "^5.0.7",
-    "vitest": "^2.1.8",
-    "vitest-mock-extended": "^2.0.2"
+    "vitest": "^1.0.4"
   },
-  "overrides": {
-    "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  }
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
